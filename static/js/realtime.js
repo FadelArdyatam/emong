@@ -242,7 +242,7 @@ socket.on('result_frame', data => {
             ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
 
             const confidencePercent = (r.confidence * 100).toFixed(0);
-            const label = `${r.emotion}: ${confidencePercent}%`;
+            const label = `${r.name} - ${r.emotion}: ${confidencePercent}%`;
             ctx.font = 'bold 18px Roboto';
             const textWidth = ctx.measureText(label).width;
             const textHeight = 18;
@@ -262,16 +262,21 @@ socket.on('result_frame', data => {
         }
     });
 
-    const r = data.results[0] || {};
-    const smoothedEmotion = smoothEmotion(r.emotion);
-    const confidencePercent = (r.confidence * 100).toFixed(0);
-    resultDiv.innerHTML = `
+    // Temukan deteksi dengan confidence tertinggi untuk dijadikan sorotan utama
+    const primary_detection = data.results.reduce((max, r) => r.confidence > max.confidence ? r : max, data.results[0]);
+
+    if (primary_detection) {
+        const person = primary_detection.name || 'Unknown';
+        const smoothedEmotion = smoothEmotion(primary_detection.emotion);
+        const confidencePercent = (primary_detection.confidence * 100).toFixed(0);
+        resultDiv.innerHTML = `
         <div class="result-container">
-            Emotion: <span class="emotion-label">${smoothedEmotion} ${r.emoji || ''}</span> (Confidence: ${confidencePercent}%)
+            Person: <span class="emotion-label">${person}</span> | Emotion: <span class="emotion-label">${smoothedEmotion} ${primary_detection.emoji || ''}</span> (Confidence: ${confidencePercent}%)
         </div>`;
 
-    if (initialEmotionTimer && r.emotion && r.emotion !== 'No face detected') {
-        initialEmotionBuffer.push(r.emotion);
+        if (initialEmotionTimer && primary_detection.emotion && primary_detection.emotion !== 'No face detected') {
+            initialEmotionBuffer.push(primary_detection.emotion);
+        }
     }
 });
 

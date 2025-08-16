@@ -8,8 +8,14 @@ import time
 import requests
 import atexit
 from src.model_loader import load_model
-from src.emotion_detector import detect_emotion, draw_bounding_box
-from config import MODEL_PATH, UPLOADS_DIR, GEMINI_API_KEY
+# --- MODIFIED IMPORT ---
+from src.emotion_detector import (
+    load_known_faces,
+    detect_emotions_and_recognize_faces,
+    draw_bounding_box,
+    get_emotion_colors,
+)
+from config import MODEL_PATH, UPLOADS_DIR, GEMINI_API_KEY, BASE_DIR
 from langdetect import detect, DetectorFactory
 
 # Memastikan langdetect memberikan hasil yang konsisten
@@ -36,13 +42,19 @@ def handle_disconnect():
     print("Klien terputus:", request.sid)
 
 
-# Load YOLO model
-print("Loading YOLO model...")
+# --- LOAD MODELS AND FACES ON STARTUP ---
+print("Loading YOLOv12s model for both face and emotion detection...")
 try:
-    model = load_model(MODEL_PATH)
+    face_detector_model = load_model(MODEL_PATH) # MODEL_PATH is yolov12s.pt
+    emotion_model = face_detector_model # Use the same model for emotion detection
 except Exception as e:
-    print(f"Error loading model: {e}")
+    print(f"Error loading YOLOv12s model: {e}")
     exit(1)
+
+print("Loading known faces...")
+known_face_encodings, known_face_names = load_known_faces('known_faces')
+# --- END LOADING ---
+
 
 # Emotion emojis and colors
 EMOTION_EMOJIS = {
@@ -71,18 +83,8 @@ EMOTION_COLORS_CSS = {
     "Unknown": "rgb(255, 255, 255)",
 }
 
-EMOTION_COLORS_BGR = {
-    "Happy": (0, 255, 0),
-    "Anger": (0, 0, 255),
-    "Neutral": (255, 0, 0),
-    "Sad": (128, 128, 128),
-    "Contempt": (0, 255, 255),
-    "Disgust": (128, 0, 128),
-    "Fear": (0, 165, 255),
-    "Surprised": (255, 0, 255),
-    "No face detected": (255, 255, 255),
-    "Unknown": (255, 255, 255),
-}
+# Menggunakan fungsi dari emotion_detector untuk konsistensi
+EMOTION_COLORS_BGR = get_emotion_colors()
 
 # Respons khusus berdasarkan emosi
 EMOTION_PROMPTS = {
@@ -297,8 +299,8 @@ def upload():
             print("Error: Failed to read image")
             return jsonify({"error": "Failed to read image"}), 500
 
-        print("Detecting emotions...")
-        detections = detect_emotion(model, image, confidence_threshold)
+        print("Detecting emotions and recognizing faces...")
+        detections = detect_emotions_and_recognize_faces(face_detector_model, emotion_model, image, known_face_encodings, known_face_names, confidence_threshold)
         print(f"Detections: {detections}")
 
         print("Drawing bounding boxes...")
@@ -320,12 +322,13 @@ def upload():
 
         results = [
             {
+                "name": name,
                 "emotion": e,
                 "confidence": c,
                 "emoji": EMOTION_EMOJIS.get(e, "❓"),
                 "color": EMOTION_COLORS_CSS.get(e, "rgb(255, 255, 255)"),
             }
-            for e, c, _ in detections
+            for name, e, c, _ in detections
         ]
         image_url = f"/uploads/{result_filename}"
         print(f"Sending response: image={image_url}, results={results}")
@@ -360,8 +363,8 @@ def capture():
             print("Error: Failed to read image")
             return jsonify({"error": "Failed to read image"}), 500
 
-        print("Detecting emotions...")
-        detections = detect_emotion(model, image, confidence_threshold)
+        print("Detecting emotions and recognizing faces...")
+        detections = detect_emotions_and_recognize_faces(face_detector_model, emotion_model, image, known_face_encodings, known_face_names, confidence_threshold)
         print(f"Detections: {detections}")
 
         print("Drawing bounding boxes...")
@@ -383,12 +386,13 @@ def capture():
 
         results = [
             {
+                "name": name,
                 "emotion": e,
                 "confidence": c,
                 "emoji": EMOTION_EMOJIS.get(e, "❓"),
                 "color": EMOTION_COLORS_CSS.get(e, "rgb(255, 255, 255)"),
             }
-            for e, c, _ in detections
+            for name, e, c, _ in detections
         ]
         image_url = f"/uploads/{result_filename}"
         print(f"Sending response: image={image_url}, results={results}")
@@ -429,7 +433,7 @@ def record():
         width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
-        # Tạo video đầu ra với codec webm
+        # Tạo video đầu ra dengan codec webm
         result_filename = f"processed_{filename}"
         result_path = os.path.join(UPLOADS_DIR, result_filename)
         fourcc = cv2.VideoWriter_fourcc(*"VP80")
@@ -440,16 +444,21 @@ def record():
             return jsonify({"error": "Failed to create output video"}), 500
 
         # Xử lý từng frame và vẽ bounding box
-        emotions = {}
+        detected_people = {}
         frame_count = 0
         while cap.isOpened():
             ret, frame = cap.read()
             if not ret:
                 break
-            if frame_count % 30 == 0:
-                detections = detect_emotion(model, frame, confidence_threshold)
-                for e, c, _ in detections:
-                    emotions[e] = max(emotions.get(e, 0), c)
+            
+            # Proses setiap beberapa frame untuk efisiensi
+            if frame_count % 15 == 0: # Proses lebih sering untuk video
+                detections = detect_emotions_and_recognize_faces(face_detector_model, emotion_model, frame, known_face_encodings, known_face_names, confidence_threshold)
+                for name, emotion, conf, _ in detections:
+                    if name not in detected_people:
+                        detected_people[name] = {}
+                    detected_people[name][emotion] = max(detected_people[name].get(emotion, 0), conf)
+                
                 result_frame = draw_bounding_box(
                     frame.copy(), detections, EMOTION_COLORS_BGR
                 )
@@ -465,19 +474,24 @@ def record():
             print("Error: Processed video not found")
             return jsonify({"error": "Processed video not found"}), 500
 
-        results = [
-            {
-                "emotion": e,
-                "confidence": c,
-                "emoji": EMOTION_EMOJIS.get(e, "❓"),
-                "color": EMOTION_COLORS_CSS.get(e, "rgb(255, 255, 255)"),
-            }
-            for e, c in emotions.items()
-        ]
+        # Siapkan hasil akhir berdasarkan orang yang terdeteksi
+        final_results = []
+        for name, emotions in detected_people.items():
+            # Cari emosi dominan untuk setiap orang
+            if emotions:
+                dominant_emotion = max(emotions, key=emotions.get)
+                confidence = emotions[dominant_emotion]
+                final_results.append({
+                    "name": name,
+                    "emotion": dominant_emotion,
+                    "confidence": confidence,
+                    "emoji": EMOTION_EMOJIS.get(dominant_emotion, "❓"),
+                    "color": EMOTION_COLORS_CSS.get(dominant_emotion, "rgb(255, 255, 255)"),
+                })
 
         video_url = f"/uploads/{result_filename}"
-        print(f"Sending response: video={video_url}, results={results}")
-        return jsonify({"video": video_url, "results": results})
+        print(f"Sending response: video={video_url}, results={final_results}")
+        return jsonify({"video": video_url, "results": final_results})
     else:
         return render_template("record.html")
 
@@ -490,70 +504,43 @@ def realtime():
 
 @socketio.on("frame")
 def handle_frame(data):
-    print("Received frame from webcam...")
     confidence_threshold = data.get("confidence", 0.3)
-    print(f"Confidence threshold: {confidence_threshold}")
     image_data = np.frombuffer(data["image"], np.uint8)
     frame = cv2.imdecode(image_data, cv2.IMREAD_COLOR)
 
     if frame is None:
-        print("Error: Invalid frame received")
-        socketio.emit(
-            "result_frame",
-            {
-                "error": "Invalid frame",
-                "results": [
-                    {
-                        "emotion": "Error",
-                        "confidence": 0.0,
-                        "emoji": "❓",
-                        "color": "rgb(255, 0, 0)",
-                    }
-                ],
-                "fps": 0,
-            },
-        )
         return
 
-    print(f"Frame shape: {frame.shape}")
-    detections = detect_emotion(model, frame, confidence_threshold)
-    print(f"Detections: {detections}")
+    detections = detect_emotions_and_recognize_faces(face_detector_model, emotion_model, frame, known_face_encodings, known_face_names, confidence_threshold)
 
     results = [
         {
+            "name": name,
             "emotion": e,
             "confidence": c,
             "emoji": EMOTION_EMOJIS.get(e, "❓"),
             "color": EMOTION_COLORS_CSS.get(e, "rgb(255, 255, 255)"),
             "bbox": [int(x1), int(y1), int(x2), int(y2)],
         }
-        for e, c, (x1, y1, x2, y2) in detections
+        for name, e, c, (x1, y1, x2, y2) in detections
     ]
 
+    # Jika tidak ada deteksi, kirim pesan khusus
     if not results:
-        results = [
-            {
-                "emotion": "No face detected",
-                "confidence": 0.0,
-                "emoji": EMOTION_EMOJIS["No face detected"],
-                "color": EMOTION_COLORS_CSS["No face detected"],
-                "bbox": [0, 0, 0, 0],
-            }
-        ]
+        results.append({
+            "name": "Unknown",
+            "emotion": "No face detected",
+            "confidence": 0.0,
+            "emoji": EMOTION_EMOJIS["No face detected"],
+            "color": EMOTION_COLORS_CSS["No face detected"],
+            "bbox": [0, 0, 0, 0],
+        })
 
-    primary_emotion = (
-        max(results, key=lambda x: x["confidence"])["emotion"]
-        if results
-        else "No face detected"
-    )
-
-    print(f"Sending detection results: {results}")
     socketio.emit(
         "result_frame",
         {
             "results": results,
             "fps": data.get("fps", 0),
-            "primary_emotion": primary_emotion,
         },
     )
 

@@ -69,7 +69,7 @@ async function processFile(file, resultDiv, detectionResultsDiv, uploadButton) {
                 const confidencePercent = (r.confidence * 100).toFixed(0);
                 detectionResultsDiv.innerHTML += `
                     <div class="result-item">
-                        <span class="emotion-label">${r.emotion} ${r.emoji}</span>
+                        <span class="emotion-label">${r.name} - ${r.emotion} ${r.emoji}</span>
                         <span class="confidence-text">(${confidencePercent}%)</span>
                     </div>`;
             });
