@@ -2,6 +2,23 @@ import cv2
 import numpy as np
 import face_recognition
 import os
+import torch # Added for PyTorch operations
+from torchvision import transforms # Added for image preprocessing
+
+# --- Helper Functions (can be moved to a utils.py if desired) ---
+
+# Define transformations for the EfficientNet BiLSTM model
+# These should match the transformations used during training
+emotion_transform = transforms.Compose([
+    transforms.ToPILImage(), # Convert OpenCV image to PIL Image
+    transforms.Resize((224, 224)),
+    transforms.ToTensor(),
+    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]), # ImageNet normalization
+])
+
+# Define the sequence length for the BiLSTM model
+SEQUENCE_LENGTH = 5 # This must match the sequence_length used during training
+import os
 
 # --- Helper Functions (can be moved to a utils.py if desired) ---
 
@@ -17,15 +34,7 @@ def get_image_quality(image):
     blur = cv2.Laplacian(gray, cv2.CV_64F).var()
     return brightness, contrast, blur
 
-def preprocess_for_emotion(face_image):
-    """
-    Mempersiapkan gambar wajah untuk deteksi emosi (contoh: normalisasi).
-    """
-    # Normalisasi histogram untuk meningkatkan kontras
-    gray_face = cv2.cvtColor(face_image, cv2.COLOR_BGR2GRAY)
-    equalized_face = cv2.equalizeHist(gray_face)
-    # Konversi kembali ke BGR karena model YOLO mengharapkan 3 channel
-    return cv2.cvtColor(equalized_face, cv2.COLOR_GRAY2BGR)
+
 
 def load_known_faces(known_faces_dir='known_faces'):
     """
@@ -67,11 +76,12 @@ def get_emotion_colors():
 
 def detect_emotions_and_recognize_faces(
     face_detector_model,
-    emotion_model,
+    emotion_model, # This is now the EfficientNet BiLSTM model
     image,
     known_face_encodings,
     known_face_names,
     recent_face_cache, # New parameter for caching
+    face_sequence_buffers, # New parameter to store sequences for BiLSTM
     face_confidence_threshold=0.4, # Keyakinan minimum untuk deteksi wajah
     emotion_confidence_threshold=0.3 # Keyakinan minimum untuk deteksi emosi
 ):
@@ -138,28 +148,59 @@ def detect_emotions_and_recognize_faces(
                 if len(recent_face_cache) > MAX_CACHE_SIZE:
                     recent_face_cache.pop(0) # Remove oldest (first element)
 
-        # 2b. Deteksi Emosi pada Wajah
-        preprocessed_face = preprocess_for_emotion(face_image)
-        emotion_results = emotion_model(preprocessed_face, verbose=False)
-        
-        emotion_label = "Neutral" # Default jika tidak ada emosi terdeteksi
+        current_frame_detected_names.add(name) # Add detected name to set for current frame
+
+        # 2b. Deteksi Emosi pada Wajah menggunakan EfficientNet BiLSTM
+        # Use the recognized name as a key for the sequence buffer
+        if name not in face_sequence_buffers:
+            face_sequence_buffers[name] = []
+
+        # Preprocess the face image for the emotion model
+        processed_face_tensor = emotion_transform(face_image)
+
+        # Add the processed face to the sequence buffer
+        face_sequence_buffers[name].append(processed_face_tensor)
+
+        # Keep the buffer size limited to SEQUENCE_LENGTH
+        if len(face_sequence_buffers[name]) > SEQUENCE_LENGTH:
+            face_sequence_buffers[name].pop(0) # Remove the oldest frame
+
+        emotion_label = "Neutral" # Default if not enough frames or no clear prediction
         emotion_conf = 0.0
 
-        if emotion_results and hasattr(emotion_results[0], 'boxes'):
-            # Cari emosi dengan confidence tertinggi dari hasil deteksi
-            highest_conf = -1
-            best_emotion = "Neutral"
-            for emotion_box in emotion_results[0].boxes:
-                if emotion_box.conf > highest_conf:
-                    highest_conf = float(emotion_box.conf)
-                    cls = int(emotion_box.cls)
-                    best_emotion = emotion_model.names[cls]
-            
-            if highest_conf > emotion_confidence_threshold:
-                emotion_label = best_emotion
-                emotion_conf = highest_conf
+        # Only make a prediction if we have enough frames in the sequence
+        if len(face_sequence_buffers[name]) == SEQUENCE_LENGTH:
+            # Stack the sequence to create a batch for the model
+            # Add batch dimension: (1, SEQUENCE_LENGTH, C, H, W)
+            sequence_batch = torch.stack(face_sequence_buffers[name]).unsqueeze(0)
+
+            # Move to CPU for inference (assuming model is on CPU)
+            # If you moved the model to GPU in app.py, you'll need to move this to GPU too
+            # sequence_batch = sequence_batch.to(device) # if using GPU
+
+            with torch.no_grad(): # No need to calculate gradients for inference
+                emotion_output = emotion_model(sequence_batch)
+                probabilities = torch.softmax(emotion_output, dim=1)
+                max_conf, predicted_idx = torch.max(probabilities, 1)
+
+                # Map predicted_idx to emotion label
+                # This list MUST match the order of classes used during your model training
+                emotion_labels_list = ["Angry", "Disgust", "Fear", "Happy", "Neutral", "Sad", "Surprised"]
+                
+                if predicted_idx.item() < len(emotion_labels_list):
+                    emotion_label = emotion_labels_list[predicted_idx.item()]
+                    emotion_conf = max_conf.item()
+
+                if emotion_conf < emotion_confidence_threshold:
+                    emotion_label = "Neutral" # Fallback if confidence is too low
 
         detections.append([name, emotion_label, emotion_conf, (x1, y1, x2, y2)])
+
+    # Clean up buffers for faces not detected in the current frame
+    # This is a simple way to remove stale entries. More robust tracking would be better.
+    keys_to_delete = [name for name in face_sequence_buffers if name not in current_frame_detected_names]
+    for key in keys_to_delete:
+        del face_sequence_buffers[key]
 
     return detections
 

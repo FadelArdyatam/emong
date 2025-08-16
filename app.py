@@ -7,6 +7,7 @@ import os
 import time
 import requests
 import atexit
+import torch # Added for PyTorch model loading
 from src.model_loader import load_model
 # --- MODIFIED IMPORT ---
 from src.emotion_detector import (
@@ -15,7 +16,11 @@ from src.emotion_detector import (
     draw_bounding_box,
     get_emotion_colors,
 )
+from src.efficientnet_bilstm_model import EfficientNetBiLSTM # Added for new emotion model
 from config import MODEL_PATH, UPLOADS_DIR, GEMINI_API_KEY, BASE_DIR
+
+# Path to the trained emotion model (assuming it's in the 'models' directory)
+EMOTION_MODEL_PATH = os.path.join(BASE_DIR, 'models', 'emotion_efficientnet_bilstm.pth')
 from langdetect import detect, DetectorFactory
 
 # Memastikan langdetect memberikan hasil yang konsisten
@@ -43,12 +48,23 @@ def handle_disconnect():
 
 
 # --- LOAD MODELS AND FACES ON STARTUP ---
-print("Loading YOLOv12s model for both face and emotion detection...")
+print("Loading YOLOv12s model for face detection...")
 try:
     face_detector_model = load_model(MODEL_PATH) # MODEL_PATH is yolov12s.pt
-    emotion_model = face_detector_model # Use the same model for emotion detection
 except Exception as e:
     print(f"Error loading YOLOv12s model: {e}")
+    exit(1)
+
+print("Loading EfficientNet BiLSTM emotion model...")
+try:
+    # Define the number of emotion classes (must match your trained model)
+    NUM_EMOTION_CLASSES = 7 # Adjust this if your model was trained with a different number of classes
+    emotion_model = EfficientNetBiLSTM(num_emotion_classes=NUM_EMOTION_CLASSES)
+    emotion_model.load_state_dict(torch.load(EMOTION_MODEL_PATH, map_location=torch.device('cpu')), strict=False)
+    emotion_model.eval() # Set to evaluation mode
+    print("EfficientNet BiLSTM emotion model loaded successfully.")
+except Exception as e:
+    print(f"Error loading EfficientNet BiLSTM emotion model from {EMOTION_MODEL_PATH}: {e}")
     exit(1)
 
 print("Loading known faces...")
@@ -301,7 +317,8 @@ def upload():
 
         print("Detecting emotions and recognizing faces...")
         recent_face_cache = [] # Initialize cache for this single image request
-        detections = detect_emotions_and_recognize_faces(face_detector_model, emotion_model, image, known_face_encodings, known_face_names, recent_face_cache, confidence_threshold)
+        face_sequence_buffers = {} # Initialize sequence buffers for this single image request
+        detections = detect_emotions_and_recognize_faces(face_detector_model, emotion_model, image, known_face_encodings, known_face_names, recent_face_cache, face_sequence_buffers, confidence_threshold)
         print(f"Detections: {detections}")
 
         print("Drawing bounding boxes...")
@@ -366,7 +383,8 @@ def capture():
 
         print("Detecting emotions and recognizing faces...")
         recent_face_cache = [] # Initialize cache for this single image request
-        detections = detect_emotions_and_recognize_faces(face_detector_model, emotion_model, image, known_face_encodings, known_face_names, recent_face_cache, confidence_threshold)
+        face_sequence_buffers = {} # Initialize sequence buffers for this single image request
+        detections = detect_emotions_and_recognize_faces(face_detector_model, emotion_model, image, known_face_encodings, known_face_names, recent_face_cache, face_sequence_buffers, confidence_threshold)
         print(f"Detections: {detections}")
 
         print("Drawing bounding boxes...")
@@ -457,7 +475,9 @@ def record():
                 # Initialize cache for video processing session
                 if 'recent_face_cache_record' not in locals():
                     recent_face_cache_record = []
-                detections = detect_emotions_and_recognize_faces(face_detector_model, emotion_model, frame, known_face_encodings, known_face_names, recent_face_cache_record, confidence_threshold)
+                if 'face_sequence_buffers_record' not in locals(): # New: Initialize sequence buffers for video
+                    face_sequence_buffers_record = {}
+                detections = detect_emotions_and_recognize_faces(face_detector_model, emotion_model, frame, known_face_encodings, known_face_names, recent_face_cache_record, face_sequence_buffers_record, confidence_threshold)
                 for name, emotion, conf, _ in detections:
                     if name not in detected_people:
                         detected_people[name] = {}
@@ -519,8 +539,12 @@ def handle_frame(data):
     global recent_face_cache_realtime
     if 'recent_face_cache_realtime' not in globals():
         recent_face_cache_realtime = []
+    
+    global face_sequence_buffers_realtime # New: Global sequence buffers for real-time
+    if 'face_sequence_buffers_realtime' not in globals():
+        face_sequence_buffers_realtime = {}
 
-    detections = detect_emotions_and_recognize_faces(face_detector_model, emotion_model, frame, known_face_encodings, known_face_names, recent_face_cache_realtime, confidence_threshold)
+    detections = detect_emotions_and_recognize_faces(face_detector_model, emotion_model, frame, known_face_encodings, known_face_names, recent_face_cache_realtime, face_sequence_buffers_realtime, confidence_threshold)
 
     results = [
         {
