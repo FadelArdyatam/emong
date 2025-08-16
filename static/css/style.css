@@ -7,7 +7,7 @@
 
 body {
     font-family: 'Roboto', sans-serif;
-    background: #f5f5f5;
+    background: #f2f7f2; /* Light greenish background */
     color: #333;
     min-height: 100vh;
     display: flex;
@@ -21,7 +21,7 @@ body {
     position: fixed;
     top: 20px;
     right: 20px;
-    background: linear-gradient(135deg, #d8b4fe, #4a90e2);
+    background: linear-gradient(135deg, #a5d6a7, #ffb74d);
     color: #fff;
     padding: 15px 25px;
     border-radius: 10px;
@@ -47,7 +47,7 @@ body {
 
 /* Navbar */
 .navbar {
-    background: linear-gradient(135deg, #d8b4fe, #4a90e2);
+    background: linear-gradient(135deg, #81c784, #ffa726);
     padding: 15px 20px;
     display: flex;
     justify-content: space-between;
@@ -117,7 +117,7 @@ body {
     color: #333;
     text-align: center;
     margin-bottom: 30px;
-    background: linear-gradient(135deg, #d8b4fe, #4a90e2);
+    background: linear-gradient(135deg, #4CAF50, #FF9800); /* CHANGED */
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
@@ -136,7 +136,7 @@ body {
 
 /* Hero Section */
 .hero-section {
-    background: linear-gradient(135deg, rgba(216, 180, 254, 0.8), rgba(74, 144, 226, 0.8));
+    background: linear-gradient(135deg, rgba(76, 175, 80, 0.8), rgba(255, 152, 0, 0.8)); /* CHANGED */
     padding: 60px 20px;
     border-radius: 15px;
     margin-bottom: 40px;
@@ -252,77 +252,79 @@ body {
     border-radius: 50%;
 }
 
+/* --- BUTTONS THEME CHANGE --- */
 .upload-btn {
-    background-color: #a3cffa;
-    color: #1e3a8a;
+    background-color: #FFB74D; /* Orange family */
+    color: #E65100;
 }
 
 .upload-btn:hover {
-    background-color: #8bb8f1;
+    background-color: #FFA726;
 }
 
 .upload-icon {
-    background-color: #a3cffa;
+    background-color: #FFB74D;
 }
 
 .upload-icon i {
-    color: #1e3a8a;
+    color: #E65100;
     font-size: 20px;
 }
 
 .capture-btn {
-    background-color: #f9a8d4;
-    color: #831843;
+    background-color: #FFB74D; /* Orange family */
+    color: #E65100;
 }
 
 .capture-btn:hover {
-    background-color: #f48fb1;
+    background-color: #FFA726;
 }
 
 .capture-icon {
-    background-color: #f9a8d4;
+    background-color: #FFB74D;
 }
 
 .capture-icon i {
-    color: #831843;
+    color: #E65100;
     font-size: 20px;
 }
 
 .record-btn {
-    background-color: #a7f3d0;
-    color: #14532d;
+    background-color: #A5D6A7; /* Green family */
+    color: #1B5E20;
 }
 
 .record-btn:hover {
-    background-color: #81e6b8;
+    background-color: #81C784;
 }
 
 .record-icon {
-    background-color: #a7f3d0;
+    background-color: #A5D6A7;
 }
 
 .record-icon i {
-    color: #14532d;
+    color: #1B5E20;
     font-size: 20px;
 }
 
 .realtime-btn {
-    background-color: #d8b4fe;
-    color: #4c1d95;
+    background-color: #A5D6A7; /* Green family */
+    color: #1B5E20;
 }
 
 .realtime-btn:hover {
-    background-color: #c084fc;
+    background-color: #81C784;
 }
 
 .realtime-icon {
-    background-color: #d8b4fe;
+    background-color: #A5D6A7;
 }
 
 .realtime-icon i {
-    color: #4c1d95;
+    color: #1B5E20;
     font-size: 20px;
 }
+/* --- END BUTTONS THEME CHANGE --- */
 
 /* Upload Section */
 .upload-section {
@@ -349,7 +351,7 @@ body {
 }
 
 .box-header {
-    background: linear-gradient(135deg, #d8b4fe, #4a90e2);
+    background: linear-gradient(135deg, #4CAF50, #FF9800); /* CHANGED */
     color: #fff;
     font-size: 18px;
     font-weight: bold;
@@ -384,7 +386,7 @@ body {
     width: 100%;
     height: 8px;
     border-radius: 5px;
-    background: linear-gradient(to right, #d8b4fe 50%, #e0e0e0 50%);
+    background: linear-gradient(to right, #4CAF50 50%, #e0e0e0 50%); /* CHANGED */
     outline: none;
     -webkit-appearance: none;
 }
@@ -395,7 +397,7 @@ body {
     height: 20px;
     border-radius: 50%;
     background: #fff;
-    border: 3px solid #d8b4fe;
+    border: 3px solid #4CAF50; /* CHANGED */
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
     cursor: pointer;
 }
@@ -405,7 +407,7 @@ body {
     height: 20px;
     border-radius: 50%;
     background: #fff;
-    border: 3px solid #d8b4fe;
+    border: 3px solid #4CAF50; /* CHANGED */
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
     cursor: pointer;
 }
@@ -428,7 +430,7 @@ body {
 
 .upload-button {
     padding: 12px 24px;
-    background: linear-gradient(135deg, #d8b4fe, #4a90e2);
+    background: linear-gradient(135deg, #4CAF50, #FF9800); /* CHANGED */
     color: #fff;
     border: none;
     border-radius: 50px;
@@ -568,7 +570,7 @@ body {
     height: 40px;
     border: 5px solid #f3f3f3;
     border-top: 5px solid transparent;
-    border-image: linear-gradient(135deg, #d8b4fe, #4a90e2) 5;
+    border-image: linear-gradient(135deg, #4CAF50, #FF9800) 5; /* CHANGED */
     border-radius: 50%;
     animation: spin 1s linear infinite;
     margin: 0 auto 10px;
@@ -602,7 +604,7 @@ body {
 }
 
 .video-header, .chat-header {
-    background: linear-gradient(135deg, #d8b4fe, #4a90e2);
+    background: linear-gradient(135deg, #4CAF50, #FF9800); /* CHANGED */
     color: #fff;
     font-size: 18px;
     font-weight: bold;
@@ -679,7 +681,7 @@ body {
 #webcam-toggle {
     width: 100%;
     padding: 12px 24px;
-    background: linear-gradient(135deg, #d8b4fe, #4a90e2);
+    background: linear-gradient(135deg, #4CAF50, #FF9800); /* CHANGED */
     color: #fff;
     border: none;
     border-radius: 50px;
@@ -715,7 +717,7 @@ body {
 }
 
 .video-info i {
-    color: #d8b4fe;
+    color: #4CAF50; /* CHANGED */
     font-size: 16px;
 }
 
@@ -757,7 +759,7 @@ body {
 }
 
 .user-message span {
-    background: linear-gradient(135deg, #d8b4fe, #4a90e2);
+    background: linear-gradient(135deg, #4CAF50, #FF9800); /* CHANGED */
     color: #fff;
     padding: 10px 15px;
     border-radius: 15px;
@@ -789,12 +791,12 @@ body {
 }
 
 .chat-input input:focus {
-    border-color: #4a90e2;
+    border-color: #4CAF50; /* CHANGED */
 }
 
 .chat-input button {
     padding: 10px;
-    background: linear-gradient(135deg, #d8b4fe, #4a90e2);
+    background: linear-gradient(135deg, #4CAF50, #FF9800); /* CHANGED */
     color: #fff;
     border: none;
     border-radius: 10px;
@@ -803,7 +805,7 @@ body {
 }
 
 .chat-input button:hover {
-    background: linear-gradient(135deg, #c084fc, #357abd);
+    background: linear-gradient(135deg, #388E3C, #F57C00); /* CHANGED */
 }
 
 .chatbot-status {
