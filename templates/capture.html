@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EMONG - Capture Photo</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="navbar">
+        <div class="navbar-brand">
+            <img src="{{ url_for('static', filename='images/ic_launcher.png') }}" alt="EMONG Logo" class="logo">
+            <a href="/">EMONG</a>
+        </div>
+        <div class="navbar-links">
+            <a href="/upload"><i class="fas fa-upload"></i> Upload</a>
+            <a href="/capture"><i class="fas fa-camera"></i> Capture</a>
+            <a href="/record"><i class="fas fa-video"></i> Record</a>
+            <a href="/realtime"><i class="fas fa-wave-square"></i> Realtime</a>
+        </div>
+    </div>
+
+    <div class="container">
+        <h1 class="page-title"><i class="fas fa-camera"></i> Capture Photo</h1>
+        <div class="upload-section">
+            <div class="confidence-box">
+                <div class="box-header">Confidence Threshold</div>
+                <div class="box-content">
+                    <div class="confidence-wrapper">
+                        <div class="confidence-label">
+                            <span>Confidence:</span>
+                            <span id="confidence-value">50%</span>
+                        </div>
+                        <input type="range" id="confidence" min="0" max="100" value="50" aria-label="Confidence Threshold">
+                    </div>
+                </div>
+            </div>
+            <div class="upload-box">
+                <div class="box-header">Capture Photo</div>
+                <div class="box-content">
+                    <div class="capture-area">
+                        <div class="webcam-off" id="webcam-off">
+                            <i class="fas fa-camera"></i>
+                            <p>Webcam is not active</p>
+                            <p>Click "Turn On Webcam" to start</p>
+                        </div>
+                        <div class="loading" id="loading" style="display: none;">
+                            <div class="spinner"></div>
+                            <p>Starting webcam...</p>
+                        </div>
+                        <video id="webcam" autoplay playsinline style="display: none;"></video>
+                        <canvas id="capture-canvas" style="display: none;"></canvas>
+                        <button id="webcam-toggle" class="upload-button">
+                            <i class="fas fa-camera"></i> Turn On Webcam
+                        </button>
+                        <button id="capture-button" class="upload-button" disabled>
+                            <i class="fas fa-camera"></i> Capture Photo
+                        </button>
+                    </div>
+                    <div class="upload-result" id="capture-result"></div>
+                    <div class="download-button-container" id="download-button-container" style="display: none;">
+                        <button id="download-image" class="upload-button">
+                            <i class="fas fa-download"></i> Download Processed Image
+                        </button>
+                    </div>
+                    <div class="detection-results-box" id="detection-results"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="notification" id="notification" style="display: none;">
+        <span>Model loaded successfully! ✅</span>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/capture.js') }}"></script>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'92fe3b5fcff8badd',t:'MTc0NDU4MTU4MC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>

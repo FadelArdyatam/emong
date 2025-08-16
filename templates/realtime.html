@@ -1,0 +1,226 @@
+<!-- File: templates/realtime.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EMONG - Realtime Emotion Detection</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
+</head>
+<body>
+    <div class="navbar">
+        <div class="navbar-brand">
+            <img src="{{ url_for('static', filename='images/ic_launcher.png') }}" alt="EMONG Logo" class="logo">
+            <a href="/">EMONG</a>
+        </div>
+        <div class="navbar-links">
+            <a href="/upload"><i class="fas fa-upload"></i> Upload</a>
+            <a href="/capture"><i class="fas fa-camera"></i> Capture</a>
+            <a href="/record"><i class="fas fa-video"></i> Record</a>
+            <a href="/realtime"><i class="fas fa-wave-square"></i> Realtime</a>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="content-row">
+            <div class="video-section">
+                <div class="video-header">
+                    <i class="fas fa-wave-square"></i> Realtime Emotion Detection
+                </div>
+                <div class="video-content">
+                    <div class="video-container">
+                        <div class="video-wrapper" id="video-wrapper">
+                            <div class="webcam-off" id="webcam-off">
+                                <i class="fas fa-camera"></i>
+                                <p>Webcam is not active</p>
+                                <p>Click "Turn On Webcam" to start</p>
+                            </div>
+                            <div class="loading" id="loading" style="display: none;">
+                                <div class="spinner"></div>
+                                <p>Starting webcam...</p>
+                            </div>
+                            <video id="realtime-video" autoplay playsinline style="display: none;"></video>
+                            <canvas id="realtime-canvas" class="overlay-canvas" style="display: none;"></canvas>
+                        </div>
+                        <button id="webcam-toggle"><i class="fas fa-camera"></i> Turn On Webcam</button>
+                    </div>
+                    <div class="confidence-wrapper" id="confidence-wrapper" style="display: none;">
+                        <div class="confidence-label">
+                            <span>Confidence Threshold:</span>
+                            <span id="confidence-value">50%</span>
+                        </div>
+                        <input type="range" id="confidence" min="0" max="100" value="50">
+                    </div>
+                    <div class="video-info" id="video-info" style="display: none;">
+                        <p><i class="fas fa-tachometer-alt"></i> FPS: <span id="fps-value">0</span></p>
+                        <p><i class="fas fa-clock"></i> Duration: <span id="time-value">0s</span></p>
+                        <p><i class="fas fa-check-circle"></i> Result: <span id="realtime-result">Processing...</span></p>
+                    </div>
+                </div>
+            </div>
+            <div class="chat-section">
+                <div class="chat-header">
+                    <span class="chat-icon">✨</span> Chat with AI
+                </div>
+                <div class="chat-container" id="chat-container">
+                    <div class="bot-message">
+                        <img src="{{ url_for('static', filename='images/ic_launcher.png') }}" alt="Bot Avatar" class="chat-avatar">
+                        <span>Hey! I'm EMONG AI, ready to chat! 😎</span>
+                    </div>
+                </div>
+                <div class="chat-input">
+                    <input type="text" id="chat-input" placeholder="Type a message...">
+                    <button title="Send Message" id="send-message"><i class="fas fa-paper-plane"></i></button>
+                </div>
+                <div class="chatbot-status" id="chatbot-status"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="notification" id="notification" style="display: none;">
+        <span>Model loaded successfully! ✅</span>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/realtime.js') }}"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            showNotification();
+        });
+
+        function showNotification() {
+            const notification = document.getElementById('notification');
+            notification.style.display = 'flex';
+            notification.classList.add('show');
+            setTimeout(() => {
+                notification.classList.remove('show');
+                setTimeout(() => {
+                    notification.style.display = 'none';
+                }, 300);
+            }, 3000);
+        }
+
+        const webcamToggle = document.getElementById('webcam-toggle');
+        const videoWrapper = document.getElementById('video-wrapper');
+        const webcamOff = document.getElementById('webcam-off');
+        const loading = document.getElementById('loading');
+        const video = document.getElementById('realtime-video');
+        const canvas = document.getElementById('realtime-canvas');
+        const confidenceWrapper = document.getElementById('confidence-wrapper');
+        const videoInfo = document.getElementById('video-info');
+        const fpsValue = document.getElementById('fps-value');
+        const timeValue = document.getElementById('time-value');
+        const result = document.getElementById('realtime-result');
+        const confidence = document.getElementById('confidence');
+        const confidenceValue = document.getElementById('confidence-value');
+        const chatInput = document.getElementById('chat-input');
+        const sendMessage = document.getElementById('send-message');
+        const chatContainer = document.getElementById('chat-container');
+        const chatbotStatus = document.getElementById('chatbot-status');
+
+        let isWebcamOn = false;
+        let time = 0;
+        let intervalId = null;
+        let stream = null;
+        let currentConfidence = confidence.value / 100;
+
+        confidence.style.background = `linear-gradient(to right, #d8b4fe 50%, #e0e0e0 50%)`;
+        confidence.addEventListener('input', () => {
+            const value = confidence.value;
+            confidenceValue.textContent = `${value}%`;
+            confidence.style.background = `linear-gradient(to right, #d8b4fe ${value}%, #e0e0e0 ${value}%)`;
+            currentConfidence = value / 100;
+            if (isWebcamOn) {
+                sendFrame(video, currentConfidence);
+            }
+        });
+
+        async function toggleWebcam() {
+            if (isWebcamOn) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+                video.srcObject = null;
+                canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+                result.innerHTML = 'Processing...';
+                webcamOff.style.display = 'block';
+                video.style.display = 'none';
+                canvas.style.display = 'none';
+                confidenceWrapper.style.display = 'none';
+                videoInfo.style.display = 'none';
+                webcamToggle.innerHTML = '<i class="fas fa-camera"></i> Turn On Webcam';
+                isWebcamOn = false;
+                clearInterval(intervalId);
+                time = 0;
+                fpsValue.textContent = '0';
+                timeValue.textContent = '0s';
+                isSendingFrames = false;
+            } else {
+                webcamOff.style.display = 'none';
+                loading.style.display = 'block';
+                webcamToggle.innerHTML = '<i class="fas fa-camera"></i> Turn Off Webcam';
+
+                try {
+                    stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                    video.srcObject = stream;
+                    video.onloadedmetadata = () => {
+                        video.play();
+                        canvas.width = video.videoWidth;
+                        canvas.height = video.videoHeight;
+                        loading.style.display = 'none';
+                        video.style.display = 'block';
+                        canvas.style.display = 'block';
+                        confidenceWrapper.style.display = 'block';
+                        videoInfo.style.display = 'block';
+                        isWebcamOn = true;
+
+                        intervalId = setInterval(() => {
+                            time += 1;
+                            timeValue.textContent = `${time}s`;
+                        }, 1000);
+
+                        sendFrame(video, currentConfidence);
+                        showNotification();
+                    };
+                } catch (error) {
+                    result.innerHTML = `<p style="color: red;">Cannot access webcam! 🚫 ${error.message}</p>`;
+                    loading.style.display = 'none';
+                    webcamOff.style.display = 'block';
+                    webcamToggle.innerHTML = '<i class="fas fa-camera"></i> Turn On Webcam';
+                }
+            }
+        }
+
+        webcamToggle.addEventListener('click', toggleWebcam);
+
+        function sendChatMessage() {
+            const message = chatInput.value.trim();
+            if (!message) {
+                chatbotStatus.textContent = 'Please enter a message!';
+                chatbotStatus.className = 'chatbot-status error';
+                return;
+            }
+
+            const userMessageDiv = document.createElement('div');
+            userMessageDiv.className = 'user-message';
+            userMessageDiv.innerHTML = `<span>${message}</span>`;
+            chatContainer.appendChild(userMessageDiv);
+
+            socket.emit('chat_message', { message: message, emotion: currentEmotion });
+
+            chatInput.value = '';
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+            chatbotStatus.className = 'chatbot-status';
+            chatbotStatus.textContent = 'Waiting for response...';
+        }
+
+        sendMessage.addEventListener('click', sendChatMessage);
+        chatInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendChatMessage();
+            }
+        });
+    </script>
+</body>
+</html>

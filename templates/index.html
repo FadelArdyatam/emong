@@ -1,0 +1,142 @@
+<!-- File: templates/index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EMONG - Emotion Monitoring </title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="navbar">
+        <div class="navbar-brand">
+            <img src="{{ url_for('static', filename='images/ic_launcher.png') }}" alt="EMONG Logo" class="logo">
+            <a href="/">EMONG</a>
+        </div>
+        <div class="navbar-links">
+            <a href="/upload"><i class="fas fa-upload"></i> Upload</a>
+            <a href="/capture"><i class="fas fa-camera"></i> Capture</a>
+            <a href="/record"><i class="fas fa-video"></i> Record</a>
+            <a href="/realtime"><i class="fas fa-wave-square"></i> Realtime</a>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="hero-section">
+            <div class="hero-overlay"></div>
+            <h1>Discover Emotions with EMONG AI ✨</h1>
+            <p>Experience cutting-edge emotion detection through images, videos, and real-time webcam analysis. Connect with our friendly AI to explore your feelings!</p>
+            <svg class="symbol-center" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="50" height="50">
+                <path fill="#d8b4fe" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 6c0-1.1.9-2 2-2s2 .9 2 2-2 4-2 4-2-2.9-2-4zm2 8c-2.76 0-5-2.24-5-5h2c0 1.66 1.34 3 3 3s3-1.34 3-3h2c0 2.76-2.24 5-5 5z"/>
+            </svg>
+        </div>
+        <div class="main-content">
+            <h1>Choose Your Experience</h1>
+            <p>Explore the power of emotion detection with our intuitive tools.</p>
+            <div class="button-container">
+                <a href="/upload" class="feature-button upload-btn">
+                    <span class="icon-wrapper upload-icon"><i class="fas fa-upload"></i></span>
+                    Upload Image
+                </a>
+                <a href="/capture" class="feature-button capture-btn">
+                    <span class="icon-wrapper capture-icon"><i class="fas fa-camera"></i></span>
+                    Capture Photo
+                </a>
+                <a href="/record" class="feature-button record-btn">
+                    <span class="icon-wrapper record-icon"><i class="fas fa-video"></i></span>
+                    Record Video
+                </a>
+                <a href="/realtime" class="feature-button realtime-btn">
+                    <span class="icon-wrapper realtime-icon"><i class="fas fa-wave-square"></i></span>
+                    Realtime Detection
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="notification" id="notification" style="display: none;">
+        <span>Model loaded successfully! ✅</span>
+    </div>
+
+    <script>
+        // Show notification on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            showNotification();
+        });
+
+        function showNotification() {
+            const notification = document.getElementById('notification');
+            notification.style.display = 'flex';
+            notification.classList.add('show');
+            setTimeout(() => {
+                notification.classList.remove('show');
+                setTimeout(() => {
+                    notification.style.display = 'none';
+                }, 300);
+            }, 3000);
+        }
+
+        // Particle effect
+        const canvas = document.createElement('canvas');
+        canvas.style.position = 'fixed';
+        canvas.style.top = '0';
+        canvas.style.left = '0';
+        canvas.style.width = '100%';
+        canvas.style.height = '100%';
+        canvas.style.pointerEvents = 'none';
+        canvas.style.zIndex = '-1';
+        document.body.appendChild(canvas);
+
+        const ctx = canvas.getContext('2d', { alpha: true });
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        const particles = [];
+        for (let i = 0; i < 80; i++) {
+            particles.push({
+                x: Math.random() * canvas.width,
+                y: Math.random() * canvas.height,
+                radius: Math.random() * 4 + 1,
+                vx: Math.random() * 1.5 - 0.75,
+                vy: Math.random() * 1.5 - 0.75,
+                color: `rgba(${Math.random() * 40 + 180}, ${Math.random() * 40 + 140}, 254, ${Math.random() * 0.5 + 0.3})`,
+                trailLength: Math.random() * 10 + 5
+            });
+        }
+
+        function animate() {
+            ctx.fillStyle = 'rgba(245, 245, 245, 0.1)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            particles.forEach(p => {
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                ctx.fillStyle = p.color;
+                ctx.fill();
+
+                ctx.beginPath();
+                ctx.moveTo(p.x, p.y);
+                ctx.lineTo(p.x - p.vx * p.trailLength, p.y - p.vy * p.trailLength);
+                ctx.strokeStyle = p.color.replace('0.5', '0.2');
+                ctx.lineWidth = p.radius / 2;
+                ctx.stroke();
+
+                p.x += p.vx;
+                p.y += p.vy;
+
+                if (p.x < 0 || p.x > canvas.width) p.vx *= -1;
+                if (p.y < 0 || p.y > canvas.height) p.vy *= -1;
+            });
+            requestAnimationFrame(animate);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,69 @@
+<!-- File: templates/upload.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EMONG - Upload Image</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="navbar">
+        <div class="navbar-brand">
+            <img src="{{ url_for('static', filename='images/ic_launcher.png') }}" alt="EMONG Logo" class="logo">
+            <a href="/">EMONG</a>
+        </div>
+        <div class="navbar-links">
+            <a href="/upload"><i class="fas fa-upload"></i> Upload</a>
+            <a href="/capture"><i class="fas fa-camera"></i> Capture</a>
+            <a href="/record"><i class="fas fa-video"></i> Record</a>
+            <a href="/realtime"><i class="fas fa-wave-square"></i> Realtime</a>
+        </div>
+    </div>
+
+    <div class="container">
+        <h1 class="page-title"><i class="fas fa-upload"></i> Upload Image</h1>
+        <div class="upload-section">
+            <div class="confidence-box">
+                <div class="box-header">Confidence Threshold</div>
+                <div class="box-content">
+                    <div class="confidence-wrapper">
+                        <div class="confidence-label">
+                            <span>Confidence:</span>
+                            <span id="confidence-value">50%</span>
+                        </div>
+                        <input aria-label="Confidence Threshold" type="range" id="confidence" min="0" max="100" value="50">
+                    </div>
+                </div>
+            </div>
+            <div class="upload-box">
+                <div class="box-header">Upload Image</div>
+                <div class="box-content">
+                    <div class="upload-area">
+                        <input type="file" id="file-input" accept="image/*" style="display: none;">
+                        <button id="upload-button" class="upload-button">
+                            <i class="fas fa-upload"></i> Choose Image
+                        </button>
+                        <p id="file-name" class="file-name">No file selected</p>
+                    </div>
+                    <div class="upload-result" id="upload-result"></div>
+                    <div class="download-button-container" id="download-button-container" style="display: none;">
+                        <button id="download-image" class="upload-button">
+                            <i class="fas fa-download"></i> Download Processed Image
+                        </button>
+                    </div>
+                    <div class="detection-results-box" id="detection-results"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="notification" id="notification" style="display: none;">
+        <span>Model loaded successfully! ✅</span>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/upload.js') }}"></script>
+</body>
+</html>
