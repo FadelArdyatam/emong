@@ -257,7 +257,7 @@ def get_gemini_response(emotion, user_message=None):
         }
 
 
-# Routes
+# region: # Routes
 @app.route("/")
 def index():
     print("Rendering index.html...")
@@ -269,6 +269,7 @@ def serve_uploaded_file(filename):
     print(f"Serving file: {filename} from {UPLOADS_DIR}")
     return send_from_directory(UPLOADS_DIR, filename)
 
+#region: # Upload image and detect emotion
 
 @app.route("/upload", methods=["GET", "POST"])
 def upload():
@@ -395,6 +396,7 @@ def capture():
     else:
         return render_template("capture.html")
 
+#region: # Record video and process it
 
 @app.route("/record", methods=["GET", "POST"])
 def record():
@@ -484,6 +486,7 @@ def record():
 def realtime():
     return render_template("realtime.html")
 
+#region: # Realtime emotion detection from webcam
 
 @socketio.on("frame")
 def handle_frame(data):
@@ -554,6 +557,7 @@ def handle_frame(data):
         },
     )
 
+#region # Chat functionality
 
 @socketio.on("chat_message")
 def handle_chat_message(data):

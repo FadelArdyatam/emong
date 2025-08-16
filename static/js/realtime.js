@@ -39,48 +39,47 @@ function smoothEmotion(newEmotion) {
     }
     return getMostFrequentEmotion(emotionBuffer);
 }
-
 const emotionResponses = {
     Happy: [
-        "Cậu trông vui quá trời luôn! 😄 Có gì thú vị đang xảy ra hả?",
-        "Ôi, nụ cười của cậu làm tớ cũng vui lây nè! 😊 Kể tớ nghe đi, hôm nay có gì hot?",
-        "Hôm nay cậu rạng rỡ ghê, chắc có tin tốt đúng không? 😄 Chia sẻ với tớ nào!"
+        "Wah, keliatannya kamu seneng banget nih! 😄 Ada kejadian seru apa nih?",
+        "Aduh, senyum kamu bikin aku ikutan senang! 😊 Cerita dong, ada apa hari ini?",
+        "Wah hari ini kamu bersinar banget, pasti ada kabar baik ya? 😄 Yuk cerita!"
     ],
     Sad: [
-        "Ôi, trông cậu hơi buồn nè... 😔 Có gì tâm sự được không, tớ nghe đây!",
-        "Cậu ơi, có chuyện gì làm cậu xuống mood vậy? 😢 Nói với tớ, biết đâu tớ giúp được!",
-        "Nhìn cậu buồn tớ cũng xót lắm... 😔 Muốn chia sẻ gì với tớ không nè?"
+        "Duh, keliatannya kamu sedih nih... 😔 Mau cerita gak? Aku siap dengerin!",
+        "Sayang, ada yang bikin kamu murung gini? 😢 Cerita ke aku, siapa tau aku bisa bantu!",
+        "Liat kamu sedih aku jadi ikutan sedih... 😔 Mau curhat gak nih?"
     ],
     Angry: [
-        "Ủa, cậu đang bực mình gì à? 😣 Kể tớ nghe, xả stress chút nào!",
-        "Cậu trông hơi căng thẳng nè, có ai chọc giận cậu hả? 😤 Nói tớ nghe đi!",
-        "Hình như cậu đang nóng trong người đúng không? 😣 Bình tĩnh, tâm sự với tớ nè!"
+        "Loh, kamu lagi kesel ya? 😣 Cerita dong, biar lega dikit!",
+        "Kamu keliatan tegang nih, ada yang bikin marah? 😤 Yuk cerita!",
+        "Kayaknya kamu lagi emosi nih bener gak? 😣 Santai, yuk cerita ke aku!"
     ],
     Surprised: [
-        "Haha, cậu bị bất ngờ gì mà mắt tròn xoe vậy? 😲 Kể tớ nghe với!",
-        "Ủa, chuyện gì làm cậu ngạc nhiên thế? 😳 Có gì hot hông, chia sẻ nào!",
-        "Nhìn cậu shock thế này chắc có drama gì đúng không? 😲 Nói tớ nghe nè!"
+        "Haha, kamu kaget apa sampe mata melotot gitu? 😲 Cerita dong!",
+        "Waduh, ada kejadian apa sih sampe kamu terkejut gini? 😳 Share dong!",
+        "Wah keliatan shock banget nih, pasti ada drama ya? 😲 Spill dong!"
     ],
     Neutral: [
-        "Cậu trông bình thản ghê, hôm nay thế nào rồi? 😊 Có gì kể tớ không?",
-        "Hình như cậu đang chill đúng không? 😎 Kể tớ nghe hôm nay cậu làm gì nè!",
-        "Cậu ơi, trông cậu thư giãn quá, có gì hay ho đang xảy ra không? 😊",
-        "Nhìn cậu bình yên thế này, chắc ngày hôm nay ổn áp đúng không? 😄 Kể tớ nghe nào!"
+        "Kamu keliatan tenang banget nih, gimana hari ini? 😊 Ada cerita apa gak?",
+        "Kayaknya kamu lagi santai ya? 😎 Cerita dong hari ini ngapain aja!",
+        "Kamu keliatan rileks banget nih, ada hal seru gak hari ini? 😊",
+        "Wah keliatannya hari ini tenang ya? 😄 Cerita dong gimana harimu!"
     ],
     Fear: [
-        "Ôi, cậu trông hơi lo lắng nè... 😟 Có gì đáng sợ hả, kể tớ nghe nào!",
-        "Cậu ơi, sao trông cậu bất an thế? 😨 Tâm sự với tớ đi, tớ ở đây nè!",
-        "Hình như cậu đang sợ gì đúng không? 😟 Nói với tớ, biết đâu tớ an ủi được!"
+        "Duh, kamu keliatan khawatir nih... 😟 Ada yang serem ya? Cerita dong!",
+        "Sayang, kok keliatannya gelisah gini? 😨 Curhat yuk, aku di sini!",
+        "Kayaknya kamu lagi takut sesuatu ya? 😟 Cerita ke aku, siapa tau aku bisa nenangin!"
     ],
     Disgust: [
-        "Ủa, cậu vừa thấy gì mà mặt nhăn vậy? 😖 Có gì kỳ cục hả, kể tớ nghe!",
-        "Haha, nhìn cậu ghê tởm gì thế? 😝 Chuyện gì làm cậu phản ứng mạnh vậy?",
-        "Cậu trông khó chịu ghê, có gì không ổn hả? 😖 Chia sẻ với tớ nè!"
+        "Loh, baru liat apa sampe muka kecut gitu? 😖 Ada yang aneh ya? Cerita dong!",
+        "Haha, keliatannya jijik banget nih? 😝 Ada apa sih sampe gitu?",
+        "Kamu keliatan nggak nyaman nih, ada yang ganggu ya? 😖 Yuk cerita!"
     ],
     Contempt: [
-        "Ôi, cậu nhìn kiểu khinh khinh thế này là có chuyện gì hả? 😏 Kể tớ nghe nào!",
-        "Cậu ơi, sao trông cậu như đang chê ai đó vậy? 😆 Có drama gì không, chia sẻ đi!",
-        "Haha, mặt cậu kiểu 'thật luôn á' đúng không? 😄 Chuyện gì khiến cậu thế này nè?"
+        "Duh, tatapan kamu kayak meremehkan gini ada apa nih? 😏 Cerita dong!",
+        "Kok keliatannya kayak lagi nyindir gitu sih? 😆 Ada drama ya, spill dong!",
+        "Haha, mukanya kayak 'seriusan nih?' gitu ya? 😄 Ada apa sih sampe gini?"
     ]
 };
 
