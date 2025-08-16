@@ -2,7 +2,7 @@ import google.generativeai as genai
 import os
 
 # Mengatur API key
-genai.configure(api_key="AIzaSyAEGNoQjDSQQOCd8tCf2JrDJQNt6_6QFwE")
+genai.configure(api_key="AIzaSyDgU8o7SLf3iVLdjkFQ3ZOpvij7Isi1lAk")
 
 # Mengambil daftar model
 for model in genai.list_models():

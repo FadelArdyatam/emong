@@ -11,7 +11,7 @@ let initialEmotionBuffer = [];
 let initialEmotionTimer = null;
 let hasInitiatedChat = false;
 let usedResponses = {};
-let detectedLanguage = 'vi'; // Mặc định là tiếng Việt
+let detectedLanguage = 'id'; // Mặc định là tiếng Việt
 
 socket.on('connect', () => {
     console.log('Socket.io connected successfully');
@@ -127,7 +127,7 @@ const emotionResponsesEnglish = {
 };
 
 function getRandomResponse(emotion) {
-    const responses = detectedLanguage === 'vi' ? emotionResponses[emotion] || emotionResponses.Neutral : emotionResponsesEnglish[emotion] || emotionResponsesEnglish.Neutral;
+    const responses = detectedLanguage === 'id' ? emotionResponses[emotion] || emotionResponses.Neutral : emotionResponsesEnglish[emotion] || emotionResponsesEnglish.Neutral;
     if (!usedResponses[emotion]) usedResponses[emotion] = [];
 
     let availableResponses = responses.filter((_, idx) => !usedResponses[emotion].includes(idx));

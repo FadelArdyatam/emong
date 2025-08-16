@@ -51,6 +51,8 @@ def load_known_faces(known_faces_dir='known_faces'):
                 print(f"Error loading known face {filename}: {e}")
     return known_face_encodings, known_face_names
 
+MAX_CACHE_SIZE = 10 # Maximum number of recent faces to cache
+
 def get_emotion_colors():
     """
     Mendefinisikan warna BGR untuk setiap emosi untuk visualisasi.
@@ -69,8 +71,9 @@ def detect_emotions_and_recognize_faces(
     image,
     known_face_encodings,
     known_face_names,
-    face_confidence_threshold=0.5, # Keyakinan minimum untuk deteksi wajah
-    emotion_confidence_threshold=0.2 # Keyakinan minimum untuk deteksi emosi
+    recent_face_cache, # New parameter for caching
+    face_confidence_threshold=0.4, # Keyakinan minimum untuk deteksi wajah
+    emotion_confidence_threshold=0.3 # Keyakinan minimum untuk deteksi emosi
 ):
     """
     Arsitektur baru: Deteksi wajah (YOLO), lalu pengenalan & deteksi emosi.
@@ -108,10 +111,32 @@ def detect_emotions_and_recognize_faces(
         if face_encodings:
             # Ambil encoding pertama (asumsi satu wajah per crop)
             face_encoding = face_encodings[0]
-            matches = face_recognition.compare_faces(known_face_encodings, face_encoding, tolerance=0.6)
-            if True in matches:
-                first_match_index = matches.index(True)
-                name = known_face_names[first_match_index]
+
+            # --- Caching Logic ---
+            found_in_cache = False
+            for i, (cached_encoding, cached_name) in enumerate(recent_face_cache):
+                # Use a slightly higher tolerance for cache matching to be more forgiving
+                if face_recognition.compare_faces([cached_encoding], face_encoding, tolerance=0.5)[0]:
+                    name = cached_name
+                    found_in_cache = True
+                    # Move to end to act as LRU (Least Recently Used)
+                    recent_face_cache.append(recent_face_cache.pop(i))
+                    break
+            
+            if not found_in_cache:
+                # Compare with known faces if not found in cache
+                matches = face_recognition.compare_faces(known_face_encodings, face_encoding, tolerance=0.6)
+                if True in matches:
+                    first_match_index = matches.index(True)
+                    name = known_face_names[first_match_index]
+                
+                # Add/Update to cache
+                # Remove if already exists to update its position (LRU)
+                recent_face_cache[:] = [(enc, n) for enc, n in recent_face_cache if not face_recognition.compare_faces([enc], face_encoding, tolerance=0.5)[0]]
+                recent_face_cache.append((face_encoding, name))
+                # Limit cache size
+                if len(recent_face_cache) > MAX_CACHE_SIZE:
+                    recent_face_cache.pop(0) # Remove oldest (first element)
 
         # 2b. Deteksi Emosi pada Wajah
         preprocessed_face = preprocess_for_emotion(face_image)

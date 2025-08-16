@@ -23,4 +23,4 @@ RECORDED_VIDEO_PATH = os.path.join(UPLOADS_DIR, "recorded_video.mp4")
 CAPTURED_IMAGE_PATH = os.path.join(UPLOADS_DIR, "captured_image.jpg")
 
 # API key untuk Gemini (ganti dengan API key sebenarnya)
-GEMINI_API_KEY = "AIzaSyAEGNoQjDSQQOCd8tCf2JrDJQNt6_6QFwE"  # Ganti dengan API key asli
+GEMINI_API_KEY = "AIzaSyDgU8o7SLf3iVLdjkFQ3ZOpvij7Isi1lAk"  # Ganti dengan API key asli

@@ -180,7 +180,7 @@ def get_gemini_response(emotion, user_message=None):
     if not GEMINI_API_KEY or GEMINI_API_KEY == "YOUR_ACTUAL_GEMINI_API_KEY":
         print("GEMINI_API_KEY is not set or invalid.")
         return {
-            "message": "Tớ không kết nối được với API Gemini... 😓 Thử lại sau nha, giờ kể tớ nghe cậu đang nghĩ gì đi! 😊",
+            "message": "Aku tidak bisa terhubung ke API Gemini... 😓 Coba lagi nanti ya, sekarang cerita ke aku, kamu lagi mikirin apa! 😊",
             "status": "error",
         }
 
@@ -198,7 +198,7 @@ def get_gemini_response(emotion, user_message=None):
         prompt_data = EMOTION_PROMPTS.get(emotion, EMOTION_PROMPTS["Neutral"])
         tone = prompt_data["tone"]
         initial_message = prompt_data["initial"]
-        prompt = f"You are a friendly chatbot acting like a close friend. Respond in Vietnamese with a {tone} tone. Use informal language, address the user as 'cậu' or 'bạn' as specified, and include emojis to make it lively. "
+        prompt = f"Lo itu chatbot yang friendly banget, berperan kayak temen deket. Jawab pake bahasa Indonesia dengan tone {tone}. Pake bahasa santai ala anak Jaksel, manggil usernya 'lo' atau 'lu', dan selipin emoji biar vibes-nya hidup "
     else:
         prompt_data = EMOTION_PROMPTS_ENGLISH.get(
             emotion, EMOTION_PROMPTS_ENGLISH["Neutral"]
@@ -300,7 +300,8 @@ def upload():
             return jsonify({"error": "Failed to read image"}), 500
 
         print("Detecting emotions and recognizing faces...")
-        detections = detect_emotions_and_recognize_faces(face_detector_model, emotion_model, image, known_face_encodings, known_face_names, confidence_threshold)
+        recent_face_cache = [] # Initialize cache for this single image request
+        detections = detect_emotions_and_recognize_faces(face_detector_model, emotion_model, image, known_face_encodings, known_face_names, recent_face_cache, confidence_threshold)
         print(f"Detections: {detections}")
 
         print("Drawing bounding boxes...")
@@ -364,7 +365,8 @@ def capture():
             return jsonify({"error": "Failed to read image"}), 500
 
         print("Detecting emotions and recognizing faces...")
-        detections = detect_emotions_and_recognize_faces(face_detector_model, emotion_model, image, known_face_encodings, known_face_names, confidence_threshold)
+        recent_face_cache = [] # Initialize cache for this single image request
+        detections = detect_emotions_and_recognize_faces(face_detector_model, emotion_model, image, known_face_encodings, known_face_names, recent_face_cache, confidence_threshold)
         print(f"Detections: {detections}")
 
         print("Drawing bounding boxes...")
@@ -443,7 +445,6 @@ def record():
             print("Error: Failed to create output video")
             return jsonify({"error": "Failed to create output video"}), 500
 
-        # Xử lý từng frame và vẽ bounding box
         detected_people = {}
         frame_count = 0
         while cap.isOpened():
@@ -453,7 +454,10 @@ def record():
             
             # Proses setiap beberapa frame untuk efisiensi
             if frame_count % 15 == 0: # Proses lebih sering untuk video
-                detections = detect_emotions_and_recognize_faces(face_detector_model, emotion_model, frame, known_face_encodings, known_face_names, confidence_threshold)
+                # Initialize cache for video processing session
+                if 'recent_face_cache_record' not in locals():
+                    recent_face_cache_record = []
+                detections = detect_emotions_and_recognize_faces(face_detector_model, emotion_model, frame, known_face_encodings, known_face_names, recent_face_cache_record, confidence_threshold)
                 for name, emotion, conf, _ in detections:
                     if name not in detected_people:
                         detected_people[name] = {}
@@ -511,7 +515,12 @@ def handle_frame(data):
     if frame is None:
         return
 
-    detections = detect_emotions_and_recognize_faces(face_detector_model, emotion_model, frame, known_face_encodings, known_face_names, confidence_threshold)
+    # Global cache for real-time stream (shared across all clients - limitation for simplicity)
+    global recent_face_cache_realtime
+    if 'recent_face_cache_realtime' not in globals():
+        recent_face_cache_realtime = []
+
+    detections = detect_emotions_and_recognize_faces(face_detector_model, emotion_model, frame, known_face_encodings, known_face_names, recent_face_cache_realtime, confidence_threshold)
 
     results = [
         {
