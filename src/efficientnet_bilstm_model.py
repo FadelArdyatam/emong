@@ -20,8 +20,8 @@ class EfficientNetBiLSTM(nn.Module):
         else:
             raise ValueError(f"EfficientNet version {efficientnet_version} not supported.")
 
-        # 2. BiLSTM Head for Temporal Modeling
-        self.lstm = nn.LSTM(
+        # 2. BiLSTM Head for Temporal Modeling (gunakan nama 'bilstm' agar sesuai dengan checkpoint)
+        self.bilstm = nn.LSTM(
             input_size=feature_dim,
             hidden_size=lstm_hidden_size,
             num_layers=lstm_num_layers,
@@ -48,8 +48,8 @@ class EfficientNetBiLSTM(nn.Module):
         # Reshape features for LSTM: (batch_size, sequence_length, feature_dim)
         features = features.view(batch_size, seq_len, -1)
 
-        # Pass through LSTM
-        lstm_out, _ = self.lstm(features) # lstm_out shape: (batch_size, sequence_length, lstm_hidden_size * 2)
+        # Pass through BiLSTM
+        lstm_out, _ = self.bilstm(features) # lstm_out shape: (batch_size, sequence_length, lstm_hidden_size * 2)
 
         # Take the output from the last time step for classification
         # Or, you could average/max pool across the sequence dimension

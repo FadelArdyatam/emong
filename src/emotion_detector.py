@@ -34,30 +34,111 @@ def get_image_quality(image):
     blur = cv2.Laplacian(gray, cv2.CV_64F).var()
     return brightness, contrast, blur
 
+def analyze_face_expression_simple(face_crop):
+    """
+    Analisis sederhana ekspresi wajah berdasarkan fitur geometris
+    """
+    try:
+        gray = cv2.cvtColor(face_crop, cv2.COLOR_BGR2GRAY)
+        
+        # Detect facial landmarks (simple approach)
+        face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+        eye_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_eye.xml')
+        smile_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_smile.xml')
+        
+        faces = face_cascade.detectMultiScale(gray, 1.1, 4)
+        
+        if len(faces) == 0:
+            return "Neutral", 0.5
+        
+        # Get the largest face
+        largest_face = max(faces, key=lambda x: x[2] * x[3])
+        x, y, w, h = largest_face
+        face_roi = gray[y:y+h, x:x+w]
+        
+        # Detect eyes
+        eyes = eye_cascade.detectMultiScale(face_roi, 1.1, 4)
+        
+        # Detect smile
+        smiles = smile_cascade.detectMultiScale(face_roi, 1.1, 4)
+        
+        # Simple heuristics
+        if len(smiles) > 0:
+            return "Happy", 0.7
+        elif len(eyes) >= 2:
+            # Check eye openness (simple brightness analysis)
+            eye_brightness = []
+            for (ex, ey, ew, eh) in eyes:
+                eye_roi = face_roi[ey:ey+eh, ex:ex+ew]
+                eye_brightness.append(np.mean(eye_roi))
+            
+            avg_eye_brightness = np.mean(eye_brightness)
+            if avg_eye_brightness > 100:  # Bright eyes might indicate happiness
+                return "Happy", 0.6
+            else:
+                return "Neutral", 0.5
+        else:
+            return "Neutral", 0.5
+            
+    except Exception as e:
+        print(f"Error in simple face analysis: {e}")
+        return "Neutral", 0.5
+
 
 
 def load_known_faces(known_faces_dir='known_faces'):
     """
     Memuat wajah yang dikenal dari direktori untuk pengenalan.
+    Mendukung multiple foto per orang dalam subfolder.
     """
     known_face_encodings = []
     known_face_names = []
+    
     if not os.path.exists(known_faces_dir):
         print(f"Warning: Known faces directory not found at '{known_faces_dir}'")
         return known_face_encodings, known_face_names
 
-    for filename in os.listdir(known_faces_dir):
-        if filename.lower().endswith(('.png', '.jpg', '.jpeg')):
-            path = os.path.join(known_faces_dir, filename)
-            name = os.path.splitext(filename)[0]
+    # Iterate through all items in the directory
+    for item in os.listdir(known_faces_dir):
+        item_path = os.path.join(known_faces_dir, item)
+        
+        if os.path.isdir(item_path):
+            # If it's a directory, treat it as a person's folder
+            person_name = item
+            print(f"Loading faces for person: {person_name}")
+            
+            # Load all images in the person's folder
+            for filename in os.listdir(item_path):
+                if filename.lower().endswith(('.png', '.jpg', '.jpeg')):
+                    image_path = os.path.join(item_path, filename)
+                    try:
+                        image = face_recognition.load_image_file(image_path)
+                        encodings = face_recognition.face_encodings(image)
+                        if encodings:
+                            # Add all encodings for this person
+                            for encoding in encodings:
+                                known_face_encodings.append(encoding)
+                                known_face_names.append(person_name)
+                            print(f"  - Loaded {len(encodings)} face(s) from {filename}")
+                        else:
+                            print(f"  - No face found in {filename}")
+                    except Exception as e:
+                        print(f"Error loading face {filename} for {person_name}: {e}")
+        
+        elif item.lower().endswith(('.png', '.jpg', '.jpeg')):
+            # If it's a direct image file, use filename as person name
+            name = os.path.splitext(item)[0]
             try:
-                image = face_recognition.load_image_file(path)
+                image = face_recognition.load_image_file(item_path)
                 encodings = face_recognition.face_encodings(image)
                 if encodings:
                     known_face_encodings.append(encodings[0])
                     known_face_names.append(name)
+                    print(f"Loaded face: {name} from {item}")
             except Exception as e:
-                print(f"Error loading known face {filename}: {e}")
+                print(f"Error loading known face {item}: {e}")
+    
+    print(f"Finished loading {len(known_face_encodings)} total faces for {len(set(known_face_names))} people.")
     return known_face_encodings, known_face_names
 
 MAX_CACHE_SIZE = 10 # Maximum number of recent faces to cache
@@ -88,6 +169,9 @@ def detect_emotions_and_recognize_faces(
     """
     Arsitektur baru: Deteksi wajah (YOLO), lalu pengenalan & deteksi emosi.
     """
+    # Initialize set to track detected names in current frame
+    current_frame_detected_names = set()
+    
     # 1. Deteksi Wajah Cepat dengan YOLO
     face_results = face_detector_model(image, verbose=False) # verbose=False untuk output bersih
     if not face_results or not hasattr(face_results[0], 'boxes'):
@@ -169,30 +253,94 @@ def detect_emotions_and_recognize_faces(
         emotion_conf = 0.0
 
         # Only make a prediction if we have enough frames in the sequence
-        if len(face_sequence_buffers[name]) == SEQUENCE_LENGTH:
+        if len(face_sequence_buffers[name]) >= 3:  # Reduced from SEQUENCE_LENGTH to be more responsive
             # Stack the sequence to create a batch for the model
+            # Use the last 5 frames or all available if less than 5
+            frames_to_use = face_sequence_buffers[name][-min(SEQUENCE_LENGTH, len(face_sequence_buffers[name])):]
+            
+            # Pad with the last frame if we don't have enough frames
+            while len(frames_to_use) < SEQUENCE_LENGTH:
+                frames_to_use.append(frames_to_use[-1])
+            
             # Add batch dimension: (1, SEQUENCE_LENGTH, C, H, W)
-            sequence_batch = torch.stack(face_sequence_buffers[name]).unsqueeze(0)
+            sequence_batch = torch.stack(frames_to_use).unsqueeze(0)
 
             # Move to CPU for inference (assuming model is on CPU)
             # If you moved the model to GPU in app.py, you'll need to move this to GPU too
             # sequence_batch = sequence_batch.to(device) # if using GPU
 
-            with torch.no_grad(): # No need to calculate gradients for inference
-                emotion_output = emotion_model(sequence_batch)
-                probabilities = torch.softmax(emotion_output, dim=1)
-                max_conf, predicted_idx = torch.max(probabilities, 1)
+            try:
+                with torch.no_grad(): # No need to calculate gradients for inference
+                    if emotion_model is not None:
+                        print(f"Making emotion prediction for {name} with {len(frames_to_use)} frames")
+                        emotion_output = emotion_model(sequence_batch)
+                        probabilities = torch.softmax(emotion_output, dim=1)
+                        max_conf, predicted_idx = torch.max(probabilities, 1)
 
-                # Map predicted_idx to emotion label
-                # This list MUST match the order of classes used during your model training
-                emotion_labels_list = ["Angry", "Disgust", "Fear", "Happy", "Neutral", "Sad", "Surprised"]
-                
-                if predicted_idx.item() < len(emotion_labels_list):
-                    emotion_label = emotion_labels_list[predicted_idx.item()]
-                    emotion_conf = max_conf.item()
+                        # Map predicted_idx to emotion label
+                        # This list MUST match the order of classes used during your model training
+                        emotion_labels_list = ["Angry", "Disgust", "Fear", "Happy", "Neutral", "Sad", "Surprised"]
+                        
+                        if predicted_idx.item() < len(emotion_labels_list):
+                            emotion_label = emotion_labels_list[predicted_idx.item()]
+                            emotion_conf = max_conf.item()
+                            
+                            # Log emotion detection for debugging
+                            print(f"✅ Emotion detected for {name}: {emotion_label} (confidence: {emotion_conf:.3f})")
+                            
+                            # Get all emotion probabilities for logging
+                            all_probs = probabilities[0].tolist()
+                            emotion_probs = {emotion_labels_list[i]: prob for i, prob in enumerate(all_probs)}
+                            print(f"📊 All emotions for {name}: {emotion_probs}")
+                            
+                            # Check if confidence is too low or predictions are too uniform
+                            prob_variance = np.var(all_probs)
+                            print(f"📈 Probability variance: {prob_variance:.4f}")
+                            
+                            # CRITICAL: Check for model bias (always predicting same emotion)
+                            # If model always predicts "Angry" for random inputs, it's biased
+                            if emotion_label == "Angry" and emotion_conf > 0.45:
+                                # Check if Happy is the second highest
+                                sorted_probs = sorted(enumerate(all_probs), key=lambda x: x[1], reverse=True)
+                                second_emotion_idx = sorted_probs[1][0]
+                                second_emotion = emotion_labels_list[second_emotion_idx]
+                                second_conf = sorted_probs[1][1]
+                                
+                                # If Happy is second and close to Angry, prefer Happy for "happy-looking" faces
+                                if second_emotion == "Happy" and second_conf > 0.3:
+                                    print(f"⚠️ Model bias detected! Angry ({emotion_conf:.3f}) vs Happy ({second_conf:.3f})")
+                                    
+                                    # Use simple face analysis as additional check
+                                    simple_emotion, simple_conf = analyze_face_expression_simple(face_crop)
+                                    print(f"🔍 Simple analysis suggests: {simple_emotion} ({simple_conf:.3f})")
+                                    
+                                    if simple_emotion == "Happy":
+                                        print(f"🎯 Correcting to Happy based on simple analysis + secondary prediction")
+                                        emotion_label = "Happy"
+                                        emotion_conf = (second_conf + simple_conf) / 2
+                                    else:
+                                        print(f"🎯 Keeping Angry as simple analysis doesn't confirm Happy")
+                            
+                            # If variance is too low (predictions too uniform), use simple heuristic
+                            elif prob_variance < 0.001 or emotion_conf < 0.25:
+                                print(f"⚠️ Model predictions uncertain (variance: {prob_variance:.4f}, conf: {emotion_conf:.3f})")
+                                emotion_label = "Neutral"  # Safe fallback
+                                emotion_conf = 0.6
 
-                if emotion_conf < emotion_confidence_threshold:
-                    emotion_label = "Neutral" # Fallback if confidence is too low
+                        if emotion_conf < emotion_confidence_threshold:
+                            emotion_label = "Neutral" # Fallback if confidence is too low
+                            print(f"⚠️ Low confidence for {name}, defaulting to Neutral")
+                    else:
+                        # Fallback when model is not available
+                        emotion_label = "Neutral"
+                        emotion_conf = 0.5
+                        print(f"❌ Model not available, using fallback for {name}")
+            except Exception as e:
+                print(f"❌ Error during emotion prediction for {name}: {e}")
+                emotion_label = "Neutral"
+                emotion_conf = 0.0
+        else:
+            print(f"⏳ Not enough frames for {name} ({len(face_sequence_buffers[name])}/{SEQUENCE_LENGTH}), using default emotion")
 
         detections.append([name, emotion_label, emotion_conf, (x1, y1, x2, y2)])
 

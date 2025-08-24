@@ -4,222 +4,389 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EMONG - Realtime Emotion Detection</title>
+    <title>Real-time Emotion Detection</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .container {
+            display: flex;
+            gap: 20px;
+            padding: 20px;
+        }
+        .video-container {
+            flex: 1;
+        }
+        .charts-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .chart-wrapper {
+            background: white;
+            border-radius: 10px;
+            padding: 15px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .emotion-log {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 15px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .emotion-item {
+            margin-bottom: 5px;
+            padding: 5px;
+            border-radius: 5px;
+        }
+        .emotion-happy { background-color: #d4edda; }
+        .emotion-sad { background-color: #f8d7da; }
+        .emotion-angry { background-color: #f5c6cb; }
+        .emotion-neutral { background-color: #e2e3e5; }
+        .emotion-surprised { background-color: #fff3cd; }
+        .emotion-fear { background-color: #d1ecf1; }
+        .emotion-disgust { background-color: #d6d8db; }
+    </style>
 </head>
 <body>
-    <div class="navbar">
-        <div class="navbar-brand">
-            <img src="{{ url_for('static', filename='images/ic_launcher.png') }}" alt="EMONG Logo" class="logo">
-            <a href="/">EMONG</a>
-        </div>
-        <div class="navbar-links">
-            <a href="/upload"><i class="fas fa-upload"></i> Upload</a>
-            <a href="/capture"><i class="fas fa-camera"></i> Capture</a>
-            <a href="/record"><i class="fas fa-video"></i> Record</a>
-            <a href="/realtime"><i class="fas fa-wave-square"></i> Realtime</a>
-        </div>
-    </div>
-
     <div class="container">
-        <div class="content-row">
-            <div class="video-section">
-                <div class="video-header">
-                    <i class="fas fa-wave-square"></i> Realtime Emotion Detection
-                </div>
-                <div class="video-content">
                     <div class="video-container">
-                        <div class="video-wrapper" id="video-wrapper">
-                            <div class="webcam-off" id="webcam-off">
-                                <i class="fas fa-camera"></i>
-                                <p>Webcam is not active</p>
-                                <p>Click "Turn On Webcam" to start</p>
+            <h2>Real-time Emotion Detection</h2>
+            <video id="video" width="640" height="480" autoplay></video>
+            <canvas id="canvas" width="640" height="480" style="display: none;"></canvas>
+            <div id="controls">
+                <button id="startButton">Start Detection</button>
+                <button id="stopButton" disabled>Stop Detection</button>
+                <label for="confidenceSlider">Confidence Threshold: <span id="confidenceValue">0.3</span></label>
+                <input type="range" id="confidenceSlider" min="0.1" max="0.9" step="0.1" value="0.3">
                             </div>
-                            <div class="loading" id="loading" style="display: none;">
-                                <div class="spinner"></div>
-                                <p>Starting webcam...</p>
+            <div id="results"></div>
                             </div>
-                            <video id="realtime-video" autoplay playsinline style="display: none;"></video>
-                            <canvas id="realtime-canvas" class="overlay-canvas" style="display: none;"></canvas>
+        
+        <div class="charts-container">
+            <div class="chart-wrapper">
+                <h3>Emotion Distribution</h3>
+                <canvas id="emotionChart" width="400" height="200"></canvas>
                         </div>
-                        <button id="webcam-toggle"><i class="fas fa-camera"></i> Turn On Webcam</button>
-                    </div>
-                    <div class="confidence-wrapper" id="confidence-wrapper" style="display: none;">
-                        <div class="confidence-label">
-                            <span>Confidence Threshold:</span>
-                            <span id="confidence-value">50%</span>
-                        </div>
-                        <input type="range" id="confidence" min="0" max="100" value="50">
-                    </div>
-                    <div class="video-info" id="video-info" style="display: none;">
-                        <p><i class="fas fa-tachometer-alt"></i> FPS: <span id="fps-value">0</span></p>
-                        <p><i class="fas fa-clock"></i> Duration: <span id="time-value">0s</span></p>
-                        <p><i class="fas fa-check-circle"></i> Result: <span id="realtime-result">Processing...</span></p>
-                    </div>
-                </div>
+            
+            <div class="chart-wrapper">
+                <h3>Emotion Confidence Over Time</h3>
+                <canvas id="confidenceChart" width="400" height="200"></canvas>
             </div>
-            <div class="chat-section">
-                <div class="chat-header">
-                    <span class="chat-icon">✨</span> Chat with AI
-                </div>
-                <div class="chat-container" id="chat-container">
-                    <div class="bot-message">
-                        <img src="{{ url_for('static', filename='images/ic_launcher.png') }}" alt="Bot Avatar" class="chat-avatar">
-                        <span>Hey! I'm EMONG AI, ready to chat! 😎</span>
-                    </div>
-                </div>
-                <div class="chat-input">
-                    <input type="text" id="chat-input" placeholder="Type a message...">
-                    <button title="Send Message" id="send-message"><i class="fas fa-paper-plane"></i></button>
-                </div>
-                <div class="chatbot-status" id="chatbot-status"></div>
+            
+            <div class="chart-wrapper">
+                <h3>Emotion Log</h3>
+                <div id="emotionLog" class="emotion-log"></div>
             </div>
         </div>
     </div>
 
-    <div class="notification" id="notification" style="display: none;">
-        <span>Model loaded successfully! ✅</span>
-    </div>
-
-    <script src="{{ url_for('static', filename='js/realtime.js') }}"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
     <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            showNotification();
-        });
-
-        function showNotification() {
-            const notification = document.getElementById('notification');
-            notification.style.display = 'flex';
-            notification.classList.add('show');
-            setTimeout(() => {
-                notification.classList.remove('show');
-                setTimeout(() => {
-                    notification.style.display = 'none';
-                }, 300);
-            }, 3000);
-        }
-
-        const webcamToggle = document.getElementById('webcam-toggle');
-        const videoWrapper = document.getElementById('video-wrapper');
-        const webcamOff = document.getElementById('webcam-off');
-        const loading = document.getElementById('loading');
-        const video = document.getElementById('realtime-video');
-        const canvas = document.getElementById('realtime-canvas');
-        const confidenceWrapper = document.getElementById('confidence-wrapper');
-        const videoInfo = document.getElementById('video-info');
-        const fpsValue = document.getElementById('fps-value');
-        const timeValue = document.getElementById('time-value');
-        const result = document.getElementById('realtime-result');
-        const confidence = document.getElementById('confidence');
-        const confidenceValue = document.getElementById('confidence-value');
-        const chatInput = document.getElementById('chat-input');
-        const sendMessage = document.getElementById('send-message');
-        const chatContainer = document.getElementById('chat-container');
-        const chatbotStatus = document.getElementById('chatbot-status');
-
-        let isWebcamOn = false;
-        let time = 0;
-        let intervalId = null;
+        const socket = io();
+        let video = document.getElementById('video');
+        let canvas = document.getElementById('canvas');
+        let ctx = canvas.getContext('2d');
+        let startButton = document.getElementById('startButton');
+        let stopButton = document.getElementById('stopButton');
+        let confidenceSlider = document.getElementById('confidenceSlider');
+        let confidenceValue = document.getElementById('confidenceValue');
+        let resultsDiv = document.getElementById('results');
+        let emotionLog = document.getElementById('emotionLog');
+        
         let stream = null;
-        let currentConfidence = confidence.value / 100;
-
-        confidence.style.background = `linear-gradient(to right, #d8b4fe 50%, #e0e0e0 50%)`;
-        confidence.addEventListener('input', () => {
-            const value = confidence.value;
-            confidenceValue.textContent = `${value}%`;
-            confidence.style.background = `linear-gradient(to right, #d8b4fe ${value}%, #e0e0e0 ${value}%)`;
-            currentConfidence = value / 100;
-            if (isWebcamOn) {
-                sendFrame(video, currentConfidence);
-            }
-        });
-
-        async function toggleWebcam() {
-            if (isWebcamOn) {
-                stream.getTracks().forEach(track => track.stop());
-                stream = null;
-                video.srcObject = null;
-                canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
-                result.innerHTML = 'Processing...';
-                webcamOff.style.display = 'block';
-                video.style.display = 'none';
-                canvas.style.display = 'none';
-                confidenceWrapper.style.display = 'none';
-                videoInfo.style.display = 'none';
-                webcamToggle.innerHTML = '<i class="fas fa-camera"></i> Turn On Webcam';
-                isWebcamOn = false;
-                clearInterval(intervalId);
-                time = 0;
-                fpsValue.textContent = '0';
-                timeValue.textContent = '0s';
-                isSendingFrames = false;
-            } else {
-                webcamOff.style.display = 'none';
-                loading.style.display = 'block';
-                webcamToggle.innerHTML = '<i class="fas fa-camera"></i> Turn Off Webcam';
-
-                try {
-                    stream = await navigator.mediaDevices.getUserMedia({ video: true });
-                    video.srcObject = stream;
-                    video.onloadedmetadata = () => {
-                        video.play();
-                        canvas.width = video.videoWidth;
-                        canvas.height = video.videoHeight;
-                        loading.style.display = 'none';
-                        video.style.display = 'block';
-                        canvas.style.display = 'block';
-                        confidenceWrapper.style.display = 'block';
-                        videoInfo.style.display = 'block';
-                        isWebcamOn = true;
-
-                        intervalId = setInterval(() => {
-                            time += 1;
-                            timeValue.textContent = `${time}s`;
-                        }, 1000);
-
-                        sendFrame(video, currentConfidence);
-                        showNotification();
-                    };
-                } catch (error) {
-                    result.innerHTML = `<p style="color: red;">Cannot access webcam! 🚫 ${error.message}</p>`;
-                    loading.style.display = 'none';
-                    webcamOff.style.display = 'block';
-                    webcamToggle.innerHTML = '<i class="fas fa-camera"></i> Turn On Webcam';
+        let isRunning = false;
+        let fps = 0;
+        let frameCount = 0;
+        let lastTime = Date.now();
+        
+        // Chart data
+        let emotionData = {
+            'Happy': 0, 'Sad': 0, 'Angry': 0, 'Neutral': 0, 
+            'Surprised': 0, 'Fear': 0, 'Disgust': 0
+        };
+        let confidenceData = {
+            labels: [],
+            datasets: []
+        };
+        let emotionHistory = [];
+        
+        // Initialize charts
+        const emotionChart = new Chart(document.getElementById('emotionChart'), {
+            type: 'doughnut',
+            data: {
+                labels: Object.keys(emotionData),
+                datasets: [{
+                    data: Object.values(emotionData),
+                    backgroundColor: [
+                        '#28a745', '#dc3545', '#ffc107', '#6c757d',
+                        '#fd7e14', '#17a2b8', '#6f42c1'
+                    ]
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    }
                 }
             }
-        }
-
-        webcamToggle.addEventListener('click', toggleWebcam);
-
-        function sendChatMessage() {
-            const message = chatInput.value.trim();
-            if (!message) {
-                chatbotStatus.textContent = 'Please enter a message!';
-                chatbotStatus.className = 'chatbot-status error';
-                return;
+        });
+        
+        const confidenceChart = new Chart(document.getElementById('confidenceChart'), {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Confidence',
+                    data: [],
+                    borderColor: '#007bff',
+                    tension: 0.1
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 1
+                    }
+                }
             }
-
-            const userMessageDiv = document.createElement('div');
-            userMessageDiv.className = 'user-message';
-            userMessageDiv.innerHTML = `<span>${message}</span>`;
-            chatContainer.appendChild(userMessageDiv);
-
-            socket.emit('chat_message', { message: message, emotion: currentEmotion });
-
-            chatInput.value = '';
-            chatContainer.scrollTop = chatContainer.scrollHeight;
-            chatbotStatus.className = 'chatbot-status';
-            chatbotStatus.textContent = 'Waiting for response...';
+        });
+        
+        // Update charts
+        function updateEmotionChart() {
+            emotionChart.data.datasets[0].data = Object.values(emotionData);
+            emotionChart.update();
         }
-
-        sendMessage.addEventListener('click', sendChatMessage);
-        chatInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                sendChatMessage();
+        
+        function updateConfidenceChart(emotion, confidence) {
+            const now = new Date().toLocaleTimeString();
+            confidenceChart.data.labels.push(now);
+            confidenceChart.data.datasets[0].data.push(confidence);
+            
+            // Keep only last 20 data points
+            if (confidenceChart.data.labels.length > 20) {
+                confidenceChart.data.labels.shift();
+                confidenceChart.data.datasets[0].data.shift();
             }
+            
+            confidenceChart.update();
+        }
+        
+        function addEmotionLog(name, emotion, confidence) {
+            const timestamp = new Date().toLocaleTimeString();
+            const logItem = document.createElement('div');
+            logItem.className = `emotion-item emotion-${emotion.toLowerCase()}`;
+            logItem.innerHTML = `[${timestamp}] ${name}: ${emotion} (${(confidence * 100).toFixed(1)}%)`;
+            
+            emotionLog.appendChild(logItem);
+            emotionLog.scrollTop = emotionLog.scrollHeight;
+            
+            // Keep only last 50 log entries
+            while (emotionLog.children.length > 50) {
+                emotionLog.removeChild(emotionLog.firstChild);
+            }
+        }
+        
+        // Confidence slider
+        confidenceSlider.addEventListener('input', function() {
+            confidenceValue.textContent = this.value;
+        });
+        
+        // Start detection
+        startButton.addEventListener('click', async function() {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                video.srcObject = stream;
+                isRunning = true;
+                startButton.disabled = true;
+                stopButton.disabled = false;
+                
+                // Start frame processing
+                processFrame();
+            } catch (err) {
+                console.error('Error accessing camera:', err);
+                alert('Error accessing camera. Please make sure you have granted camera permissions.');
+            }
+        });
+        
+        // Stop detection
+        stopButton.addEventListener('click', function() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+            }
+            isRunning = false;
+            startButton.disabled = false;
+            stopButton.disabled = true;
+        });
+        
+        // Process frames
+        function processFrame() {
+            if (!isRunning) return;
+            
+            // Calculate FPS
+            frameCount++;
+            const currentTime = Date.now();
+            if (currentTime - lastTime >= 1000) {
+                fps = frameCount;
+                frameCount = 0;
+                lastTime = currentTime;
+            }
+            
+            // Draw video frame to canvas
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            // Get image data and send to server
+            canvas.toBlob(function(blob) {
+                const reader = new FileReader();
+                reader.onload = function() {
+                    const arrayBuffer = this.result;
+                    const uint8Array = new Uint8Array(arrayBuffer);
+                    
+                    socket.emit('frame', {
+                        image: Array.from(uint8Array),
+                        confidence: parseFloat(confidenceSlider.value),
+                        fps: fps
+                    });
+                };
+                reader.readAsArrayBuffer(blob);
+            }, 'image/jpeg', 0.8);
+            
+            // Continue processing
+            requestAnimationFrame(processFrame);
+        }
+        
+        // Socket event handlers
+        socket.on('result_frame', function(data) {
+            console.log('📊 Received result_frame data:', data);
+            resultsDiv.innerHTML = '';
+            
+            // Clear previous bounding boxes and redraw video frame
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            if (video.videoWidth > 0 && video.videoHeight > 0) {
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            }
+            
+            data.results.forEach(function(result) {
+                // Display results in div
+                const resultDiv = document.createElement('div');
+                resultDiv.innerHTML = `
+                    <strong>${result.name}</strong>: ${result.emotion} ${result.emoji} 
+                    (${(result.confidence * 100).toFixed(1)}%)
+                `;
+                resultDiv.style.color = result.color;
+                resultsDiv.appendChild(resultDiv);
+                
+                // Draw bounding box on canvas
+                if (result.bbox && result.bbox.length === 4 && result.emotion !== 'No face detected') {
+                    const [x1, y1, x2, y2] = result.bbox;
+                    
+                    // Scale coordinates to canvas size
+                    const scaleX = canvas.width / video.videoWidth;
+                    const scaleY = canvas.height / video.videoHeight;
+                    
+                    const scaledX1 = x1 * scaleX;
+                    const scaledY1 = y1 * scaleY;
+                    const scaledX2 = x2 * scaleX;
+                    const scaledY2 = y2 * scaleY;
+                    
+                    // Draw bounding box
+                    ctx.strokeStyle = result.color;
+                    ctx.lineWidth = 3;
+                    ctx.strokeRect(scaledX1, scaledY1, scaledX2 - scaledX1, scaledY2 - scaledY1);
+                    
+                    // Draw label background
+                    const label = `${result.name} - ${result.emotion}`;
+                    ctx.font = '14px Arial';
+                    const labelWidth = ctx.measureText(label).width;
+                    ctx.fillStyle = result.color;
+                    ctx.fillRect(scaledX1, scaledY1 - 25, labelWidth + 10, 20);
+                    
+                    // Draw label text
+                    ctx.fillStyle = '#000000';
+                    ctx.fillText(label, scaledX1 + 5, scaledY1 - 10);
+                    
+                    console.log(`🎯 Drawing bounding box for ${result.name}: [${x1},${y1},${x2},${y2}] -> [${scaledX1},${scaledY1},${scaledX2},${scaledY2}]`);
+                }
+                
+                // Update charts and logs
+                if (result.emotion !== 'No face detected' && result.emotion !== 'Unknown') {
+                    // Update emotion distribution
+                    if (emotionData.hasOwnProperty(result.emotion)) {
+                        emotionData[result.emotion]++;
+                    }
+                    
+                    // Update confidence chart
+                    updateConfidenceChart(result.emotion, result.confidence);
+                    
+                    // Add to log
+                    addEmotionLog(result.name, result.emotion, result.confidence);
+                }
+            });
+            
+            // Update emotion chart
+            updateEmotionChart();
+            
+            // Also update charts from server data
+            updateChartsFromServer();
+        });
+        
+        // Function to update charts from server data
+        function updateChartsFromServer() {
+            fetch('/api/emotion-data')
+                .then(response => response.json())
+                .then(data => {
+                    console.log('📊 Received emotion data from server:', data);
+                    
+                    // Update emotion distribution chart
+                    if (data.emotion_distribution) {
+                        // Update local emotion data
+                        Object.keys(data.emotion_distribution).forEach(emotion => {
+                            if (emotionData.hasOwnProperty(emotion)) {
+                                emotionData[emotion] = data.emotion_distribution[emotion];
+                            }
+                        });
+                        updateEmotionChart();
+                    }
+                    
+                    // Update confidence chart with recent emotions
+                    if (data.recent_emotions && data.recent_emotions.length > 0) {
+                        // Clear existing data
+                        confidenceChart.data.labels = [];
+                        confidenceChart.data.datasets[0].data = [];
+                        
+                        // Add recent emotions to chart
+                        data.recent_emotions.forEach(record => {
+                            const time = new Date(record.timestamp * 1000).toLocaleTimeString();
+                            confidenceChart.data.labels.push(time);
+                            confidenceChart.data.datasets[0].data.push(record.confidence);
+                        });
+                        
+                        // Keep only last 20 data points
+                        if (confidenceChart.data.labels.length > 20) {
+                            confidenceChart.data.labels = confidenceChart.data.labels.slice(-20);
+                            confidenceChart.data.datasets[0].data = confidenceChart.data.datasets[0].data.slice(-20);
+                        }
+                        
+                        confidenceChart.update();
+                    }
+                })
+                .catch(error => console.error('❌ Error fetching emotion data:', error));
+        }
+        
+        socket.on('connect', function() {
+            console.log('Connected to server');
+        });
+        
+        socket.on('disconnect', function() {
+            console.log('Disconnected from server');
         });
     </script>
 </body>

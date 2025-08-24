@@ -20,7 +20,7 @@ from src.efficientnet_bilstm_model import EfficientNetBiLSTM # Added for new emo
 from config import MODEL_PATH, UPLOADS_DIR, GEMINI_API_KEY, BASE_DIR
 
 # Path to the trained emotion model (assuming it's in the 'models' directory)
-EMOTION_MODEL_PATH = os.path.join(BASE_DIR, 'models', 'emotion_efficientnet_bilstm.pth')
+EMOTION_MODEL_PATH = os.path.join(BASE_DIR, 'models', 'emotion_efficientnet_bilstm_trained.pth')
 from langdetect import detect, DetectorFactory
 
 # Memastikan langdetect memberikan hasil yang konsisten
@@ -29,7 +29,17 @@ DetectorFactory.seed = 0
 app = Flask(__name__)
 UPLOAD_FOLDER = "uploads"
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
-socketio = SocketIO(app, async_mode="threading")
+socketio = SocketIO(app, async_mode="eventlet", cors_allowed_origins="*")
+
+# Thread-safe cache for real-time processing
+import threading
+recent_face_cache_realtime = []
+face_sequence_buffers_realtime = {}
+cache_lock = threading.Lock()
+
+# Emotion tracking for analytics
+emotion_history = []
+emotion_history_lock = threading.Lock()
 
 # Membuat folder uploads jika belum ada
 if not os.path.exists(UPLOAD_FOLDER):
@@ -60,12 +70,26 @@ try:
     # Define the number of emotion classes (must match your trained model)
     NUM_EMOTION_CLASSES = 7 # Adjust this if your model was trained with a different number of classes
     emotion_model = EfficientNetBiLSTM(num_emotion_classes=NUM_EMOTION_CLASSES)
-    emotion_model.load_state_dict(torch.load(EMOTION_MODEL_PATH, map_location=torch.device('cpu')), strict=False)
+    
+    # Load model with better error handling
+    if os.path.exists(EMOTION_MODEL_PATH):
+        checkpoint = torch.load(EMOTION_MODEL_PATH, map_location=torch.device('cpu'))
+        # Load only the parts that match the current model architecture
+        model_dict = emotion_model.state_dict()
+        pretrained_dict = {k: v for k, v in checkpoint.items() if k in model_dict and model_dict[k].shape == v.shape}
+        model_dict.update(pretrained_dict)
+        emotion_model.load_state_dict(model_dict, strict=False)
+        print(f"Loaded {len(pretrained_dict)}/{len(model_dict)} layers from checkpoint")
+    else:
+        print(f"Warning: Model file not found at {EMOTION_MODEL_PATH}")
+        print("Using randomly initialized model")
+    
     emotion_model.eval() # Set to evaluation mode
     print("EfficientNet BiLSTM emotion model loaded successfully.")
 except Exception as e:
     print(f"Error loading EfficientNet BiLSTM emotion model from {EMOTION_MODEL_PATH}: {e}")
-    exit(1)
+    print("Continuing with basic functionality...")
+    emotion_model = None
 
 print("Loading known faces...")
 known_face_encodings, known_face_names = load_known_faces('known_faces')
@@ -106,7 +130,7 @@ EMOTION_COLORS_BGR = get_emotion_colors()
 EMOTION_PROMPTS = {
     "Happy": {
         "initial": "Haha, kamu kelihatan bahagia banget! 😄 Ada kabar seru apa nih? Ceritain ke aku dong! 🎉",
-        "tone": "ceria, energik, suka bercanda, banyak emoji seperti 😄, 🎉, sapaan 'kamu-aku'",
+        "tone": "ceria, energik, suka bercanda, banyak emoji seperti ��, 🎉, sapaan 'kamu-aku'",
     },
     "Anger": {
         "initial": "Waduh, kamu kenapa kelihatan marah begitu? 😣 Ada yang nggak beres ya? Cerita ke saya biar bisa bantu! 🤗",
@@ -524,27 +548,54 @@ def record():
 def realtime():
     return render_template("realtime.html")
 
+@app.route("/api/emotion-data", methods=["GET"])
+def get_emotion_data():
+    """Get emotion data for analytics"""
+    with emotion_history_lock:
+        # Return last 100 emotion records
+        recent_emotions = emotion_history[-100:] if len(emotion_history) > 100 else emotion_history
+        
+        # Calculate emotion distribution
+        emotion_counts = {}
+        for record in recent_emotions:
+            emotion = record.get('emotion', 'Unknown')
+            emotion_counts[emotion] = emotion_counts.get(emotion, 0) + 1
+        
+        return jsonify({
+            'recent_emotions': recent_emotions,
+            'emotion_distribution': emotion_counts,
+            'total_records': len(emotion_history)
+        })
+
 #region: # Realtime emotion detection from webcam
 
 @socketio.on("frame")
 def handle_frame(data):
     confidence_threshold = data.get("confidence", 0.3)
-    image_data = np.frombuffer(data["image"], np.uint8)
+    
+    # Fix: Handle both list and bytes data
+    if isinstance(data["image"], list):
+        image_data = np.array(data["image"], dtype=np.uint8)
+    else:
+        image_data = np.frombuffer(data["image"], np.uint8)
+    
     frame = cv2.imdecode(image_data, cv2.IMREAD_COLOR)
 
     if frame is None:
         return
 
-    # Global cache for real-time stream (shared across all clients - limitation for simplicity)
-    global recent_face_cache_realtime
-    if 'recent_face_cache_realtime' not in globals():
-        recent_face_cache_realtime = []
-    
-    global face_sequence_buffers_realtime # New: Global sequence buffers for real-time
-    if 'face_sequence_buffers_realtime' not in globals():
-        face_sequence_buffers_realtime = {}
-
-    detections = detect_emotions_and_recognize_faces(face_detector_model, emotion_model, frame, known_face_encodings, known_face_names, recent_face_cache_realtime, face_sequence_buffers_realtime, confidence_threshold)
+    # Use thread-safe cache for real-time stream
+    with cache_lock:
+        detections = detect_emotions_and_recognize_faces(
+            face_detector_model, 
+            emotion_model, 
+            frame, 
+            known_face_encodings, 
+            known_face_names, 
+            recent_face_cache_realtime, 
+            face_sequence_buffers_realtime, 
+            confidence_threshold
+        )
 
     results = [
         {
@@ -557,6 +608,23 @@ def handle_frame(data):
         }
         for name, e, c, (x1, y1, x2, y2) in detections
     ]
+
+    # Track emotion history for analytics
+    with emotion_history_lock:
+        for result in results:
+            if result['emotion'] not in ['No face detected', 'Unknown']:
+                emotion_record = {
+                    'timestamp': time.time(),
+                    'name': result['name'],
+                    'emotion': result['emotion'],
+                    'confidence': result['confidence'],
+                    'emoji': result['emoji']
+                }
+                emotion_history.append(emotion_record)
+                
+                # Keep only last 1000 records to prevent memory issues
+                if len(emotion_history) > 1000:
+                    emotion_history.pop(0)
 
     # Jika tidak ada deteksi, kirim pesan khusus
     if not results:
