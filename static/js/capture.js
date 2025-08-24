@@ -105,23 +105,55 @@ async function processPhoto(file, resultDiv, detectionResultsDiv) {
             };
         }
 
-        if (result.results && result.results.length > 0) {
+        if (result.results && result.detections && result.detections.length > 0) {
             detectionResultsDiv.innerHTML = '<h3>Detection Results 📊</h3>';
-            result.results.forEach(r => {
-                const confidencePercent = (r.confidence * 100).toFixed(0);
+            result.detections.forEach(detection => {
+                const emotion = detection.emotion || 'Unknown';
+                const confidence = detection.emotion_confidence || 0;
+                const confidencePercent = (confidence * 100).toFixed(1);
+                const emoji = getEmotionEmoji(emotion);
+                
                 detectionResultsDiv.innerHTML += `
-                    <div class="result-item">
-                        <span class="emotion-label">${r.name} - ${r.emotion} ${r.emoji}</span>
-                        <span class="confidence-text">(${confidencePercent}%)</span>
+                    <div class="result-item ${emotion.toLowerCase()}">
+                        <div class="result-header">
+                            <span class="emotion-emoji">${emoji}</span>
+                            <span class="emotion-label">${emotion}</span>
+                            <span class="confidence-text">${confidencePercent}%</span>
+                        </div>
+                        <div class="result-details">
+                            <span class="track-id">ID: ${detection.track_id}</span>
+                            <span class="bbox-info">BBox: [${detection.bbox.join(', ')}]</span>
+                        </div>
                     </div>`;
             });
         } else {
-            detectionResultsDiv.innerHTML = '<p class="no-face">No faces detected!</p>';
+            detectionResultsDiv.innerHTML = '<p class="no-face">No faces detected! 😔</p>';
+        }
+        
+        // Show processing time
+        if (result.processing_time) {
+            detectionResultsDiv.innerHTML += `
+                <div class="processing-info">
+                    <p>Processing time: ${(result.processing_time * 1000).toFixed(1)}ms</p>
+                    <p>Total faces detected: ${result.total_faces || 0}</p>
+                </div>`;
         }
     } catch (error) {
-        resultDiv.innerHTML = `<p class="error-message">Error processing photo!</p>`;
+        resultDiv.innerHTML = `<p class="error-message">Error processing photo: ${error.message} 🚫</p>`;
         detectionResultsDiv.innerHTML = '';
     }
+}
+
+function getEmotionEmoji(emotion) {
+    const emojiMap = {
+        'Happy': '😊',
+        'Neutral': '😐',
+        'Sad': '😢',
+        'Angry': '😠',
+        'Surprised': '😲',
+        'Unknown': '❓'
+    };
+    return emojiMap[emotion] || '❓';
 }
 
 function showNotification() {

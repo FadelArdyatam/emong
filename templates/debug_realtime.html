@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EMONG - Debug Realtime</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f0f0f0; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; }
+        .debug-info { background: #e8f4fd; padding: 15px; border-radius: 5px; margin: 10px 0; }
+        .error { background: #ffe6e6; color: #d32f2f; }
+        .success { background: #e8f5e8; color: #388e3c; }
+        button { padding: 10px 20px; margin: 5px; border: none; border-radius: 5px; cursor: pointer; }
+        .primary { background: #2196f3; color: white; }
+        .secondary { background: #757575; color: white; }
+        #webcam { width: 100%; max-width: 640px; height: auto; border: 2px solid #ccc; }
+        #canvas { border: 2px solid #f00; position: absolute; }
+        .video-container { position: relative; display: inline-block; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🐛 Debug Realtime Face Detection</h1>
+        
+        <div class="debug-info">
+            <h3>Debug Information</h3>
+            <div id="debug-status">Status: Initializing...</div>
+            <div id="debug-faces">Faces Detected: 0</div>
+            <div id="debug-fps">FPS: 0</div>
+        </div>
+        
+        <div class="debug-info">
+            <h3>Controls</h3>
+            <button class="primary" onclick="startWebcam()">Start Webcam</button>
+            <button class="secondary" onclick="stopWebcam()">Stop Webcam</button>
+            <button class="secondary" onclick="testDetection()">Test Detection</button>
+        </div>
+        
+        <div class="debug-info">
+            <h3>Video Feed</h3>
+            <div class="video-container">
+                <video id="webcam" autoplay playsinline style="display: none;"></video>
+                <canvas id="canvas" style="display: none;"></canvas>
+                <div id="webcam-off">
+                    <p>Webcam not active</p>
+                    <p>Click "Start Webcam" to begin</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="debug-info">
+            <h3>Console Log</h3>
+            <div id="console-log" style="background: #000; color: #0f0; padding: 10px; height: 200px; overflow-y: auto; font-family: monospace; font-size: 12px;"></div>
+        </div>
+    </div>
+
+    <script>
+        let stream = null;
+        let isProcessing = false;
+        let frameCount = 0;
+        let lastTime = Date.now();
+        
+        // Console logging
+        function log(message, type = 'info') {
+            const consoleDiv = document.getElementById('console-log');
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.textContent = `[${timestamp}] ${message}`;
+            logEntry.style.color = type === 'error' ? '#ff6b6b' : type === 'success' ? '#51cf66' : '#0f0';
+            consoleDiv.appendChild(logEntry);
+            consoleDiv.scrollTop = consoleDiv.scrollHeight;
+            console.log(message);
+        }
+        
+        // Update debug info
+        function updateDebugInfo() {
+            const now = Date.now();
+            const fps = Math.round((frameCount * 1000) / (now - lastTime));
+            
+            document.getElementById('debug-fps').textContent = `FPS: ${fps}`;
+            document.getElementById('debug-status').textContent = `Status: ${isProcessing ? 'Processing' : 'Idle'}`;
+        }
+        
+        // Start webcam
+        async function startWebcam() {
+            try {
+                log('🚀 Starting webcam...', 'info');
+                document.getElementById('debug-status').textContent = 'Status: Starting webcam...';
+                
+                stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        width: { ideal: 640 },
+                        height: { ideal: 480 }
+                    } 
+                });
+                
+                const video = document.getElementById('webcam');
+                video.srcObject = stream;
+                video.style.display = 'block';
+                document.getElementById('webcam-off').style.display = 'none';
+                
+                video.onloadedmetadata = () => {
+                    video.play();
+                    log('✅ Webcam started successfully!', 'success');
+                    document.getElementById('debug-status').textContent = 'Status: Webcam active';
+                    
+                    // Start processing
+                    startProcessing();
+                };
+                
+            } catch (error) {
+                log(`❌ Webcam error: ${error.message}`, 'error');
+                document.getElementById('debug-status').textContent = `Status: Error - ${error.message}`;
+            }
+        }
+        
+        // Stop webcam
+        function stopWebcam() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+                
+                const video = document.getElementById('webcam');
+                video.style.display = 'none';
+                document.getElementById('webcam-off').style.display = 'block';
+                
+                isProcessing = false;
+                log('⏹️ Webcam stopped', 'info');
+                document.getElementById('debug-status').textContent = 'Status: Webcam stopped';
+            }
+        }
+        
+        // Start processing
+        function startProcessing() {
+            if (isProcessing) return;
+            
+            isProcessing = true;
+            log('🔄 Starting face detection processing...', 'info');
+            
+            const video = document.getElementById('webcam');
+            const canvas = document.getElementById('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            canvas.style.display = 'block';
+            
+            function processFrame() {
+                if (!isProcessing || !stream) return;
+                
+                // Draw video frame to canvas
+                ctx.drawImage(video, 0, 0);
+                
+                // Simulate face detection (replace with actual detection)
+                simulateFaceDetection(ctx);
+                
+                frameCount++;
+                updateDebugInfo();
+                
+                requestAnimationFrame(processFrame);
+            }
+            
+            processFrame();
+        }
+        
+        // Simulate face detection
+        function simulateFaceDetection(ctx) {
+            // Draw a simple rectangle to simulate face detection
+            ctx.strokeStyle = '#00ff00';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(100, 100, 200, 200);
+            
+            // Add label
+            ctx.fillStyle = '#00ff00';
+            ctx.font = '16px Arial';
+            ctx.fillText('Face Detected (Simulated)', 100, 90);
+            
+            // Update face count
+            document.getElementById('debug-faces').textContent = 'Faces Detected: 1 (Simulated)';
+        }
+        
+        // Test detection
+        function testDetection() {
+            log('🧪 Testing face detection...', 'info');
+            
+            const canvas = document.getElementById('canvas');
+            if (canvas.style.display !== 'none') {
+                const ctx = canvas.getContext('2d');
+                simulateFaceDetection(ctx);
+                log('✅ Test detection completed', 'success');
+            } else {
+                log('❌ Canvas not available. Start webcam first.', 'error');
+            }
+        }
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            log('🔧 Debug page initialized', 'info');
+            updateDebugInfo();
+            
+            // Update debug info every second
+            setInterval(updateDebugInfo, 1000);
+        });
+    </script>
+</body>
+</html> 

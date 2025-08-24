@@ -1,320 +1,550 @@
-let socket = io();
-let prevTime = 0;
-let currentEmotion = 'Neutral';
-let dominantEmotion = 'Neutral';
-let emotionBuffer = [];
-const EMOTION_BUFFER_SIZE = 5;
-let isSendingFrames = false;
-let lastFrameTime = 0;
-const FRAME_INTERVAL = 100;
-let initialEmotionBuffer = [];
-let initialEmotionTimer = null;
-let hasInitiatedChat = false;
-let usedResponses = {};
-let detectedLanguage = 'vi'; // Mặc định là tiếng Việt
+// Advanced Real-time Emotion Detection with Charts and Visualizations
+let stream = null;
+let canvas = null;
+let ctx = null;
+let isProcessing = false;
+let emotionHistory = {};
+let chart = null;
+let personCounter = 0;
 
-socket.on('connect', () => {
-    console.log('Socket.io connected successfully');
-});
+// Chart.js untuk realtime emotion distribution
+let emotionChart = null;
+let emotionData = {
+    labels: ['Happy', 'Neutral', 'Sad', 'Angry', 'Surprised'],
+    datasets: [{
+        label: 'Current Emotions',
+        data: [0, 0, 0, 0, 0],
+        backgroundColor: [
+            'rgba(0, 255, 0, 0.8)',   // Happy - Green
+            'rgba(0, 0, 255, 0.8)',   // Neutral - Blue
+            'rgba(128, 128, 128, 0.8)', // Sad - Gray
+            'rgba(255, 0, 0, 0.8)',   // Angry - Red
+            'rgba(255, 0, 255, 0.8)'  // Surprised - Magenta
+        ],
+        borderColor: [
+            'rgba(0, 255, 0, 1)',
+            'rgba(0, 0, 255, 1)',
+            'rgba(128, 128, 128, 1)',
+            'rgba(255, 0, 0, 1)',
+            'rgba(255, 0, 255, 1)'
+        ],
+        borderWidth: 2
+    }]
+};
 
-socket.on('disconnect', () => {
-    console.log('Socket.io disconnected');
-});
+// Initialize realtime dashboard
+function initializeRealtimeDashboard() {
+    // Create canvas overlay untuk bounding boxes
+    const videoContainer = document.querySelector('.video-container');
+    canvas = document.createElement('canvas');
+    canvas.id = 'overlay-canvas';
+    canvas.style.position = 'absolute';
+    canvas.style.top = '0';
+    canvas.style.left = '0';
+    canvas.style.pointerEvents = 'none';
+    canvas.style.zIndex = '10';
+    
+    videoContainer.appendChild(canvas);
+    ctx = canvas.getContext('2d');
+    
+    // Initialize Chart.js
+    initializeEmotionChart();
+    
+    // Initialize statistics dashboard
+    initializeStatsDashboard();
+    
+    console.log('✅ Realtime dashboard initialized');
+}
 
-function getMostFrequentEmotion(emotions) {
-    if (!emotions || emotions.length === 0) return 'Neutral';
-    const emotionCount = {};
-    emotions.forEach(emotion => {
-        emotionCount[emotion] = (emotionCount[emotion] || 0) + 1;
+// Initialize emotion distribution chart
+function initializeEmotionChart() {
+    const chartCanvas = document.getElementById('emotion-chart');
+    if (!chartCanvas) return;
+    
+    emotionChart = new Chart(chartCanvas, {
+        type: 'doughnut',
+        data: emotionData,
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        color: '#ffffff',
+                        font: {
+                            size: 12
+                        }
+                    }
+                },
+                title: {
+                    display: true,
+                    text: 'Real-time Emotion Distribution',
+                    color: '#ffffff',
+                    font: {
+                        size: 16
+                    }
+                }
+            },
+            animation: {
+                duration: 500,
+                easing: 'easeInOutQuart'
+            }
+        }
     });
-    return Object.keys(emotionCount).reduce((a, b) => emotionCount[a] > emotionCount[b] ? a : b);
 }
 
-function smoothEmotion(newEmotion) {
-    if (!isSendingFrames) return currentEmotion;
-    if (!newEmotion || newEmotion === 'No face detected') return currentEmotion;
-    emotionBuffer.push(newEmotion);
-    if (emotionBuffer.length > EMOTION_BUFFER_SIZE) {
-        emotionBuffer.shift();
-    }
-    return getMostFrequentEmotion(emotionBuffer);
-}
-const emotionResponses = {
-    Happy: [
-        "Wah, keliatannya kamu seneng banget nih! 😄 Ada kejadian seru apa nih?",
-        "Aduh, senyum kamu bikin aku ikutan senang! 😊 Cerita dong, ada apa hari ini?",
-        "Wah hari ini kamu bersinar banget, pasti ada kabar baik ya? 😄 Yuk cerita!"
-    ],
-    Sad: [
-        "Duh, keliatannya kamu sedih nih... 😔 Mau cerita gak? Aku siap dengerin!",
-        "Sayang, ada yang bikin kamu murung gini? 😢 Cerita ke aku, siapa tau aku bisa bantu!",
-        "Liat kamu sedih aku jadi ikutan sedih... 😔 Mau curhat gak nih?"
-    ],
-    Angry: [
-        "Loh, kamu lagi kesel ya? 😣 Cerita dong, biar lega dikit!",
-        "Kamu keliatan tegang nih, ada yang bikin marah? 😤 Yuk cerita!",
-        "Kayaknya kamu lagi emosi nih bener gak? 😣 Santai, yuk cerita ke aku!"
-    ],
-    Surprised: [
-        "Haha, kamu kaget apa sampe mata melotot gitu? 😲 Cerita dong!",
-        "Waduh, ada kejadian apa sih sampe kamu terkejut gini? 😳 Share dong!",
-        "Wah keliatan shock banget nih, pasti ada drama ya? 😲 Spill dong!"
-    ],
-    Neutral: [
-        "Kamu keliatan tenang banget nih, gimana hari ini? 😊 Ada cerita apa gak?",
-        "Kayaknya kamu lagi santai ya? 😎 Cerita dong hari ini ngapain aja!",
-        "Kamu keliatan rileks banget nih, ada hal seru gak hari ini? 😊",
-        "Wah keliatannya hari ini tenang ya? 😄 Cerita dong gimana harimu!"
-    ],
-    Fear: [
-        "Duh, kamu keliatan khawatir nih... 😟 Ada yang serem ya? Cerita dong!",
-        "Sayang, kok keliatannya gelisah gini? 😨 Curhat yuk, aku di sini!",
-        "Kayaknya kamu lagi takut sesuatu ya? 😟 Cerita ke aku, siapa tau aku bisa nenangin!"
-    ],
-    Disgust: [
-        "Loh, baru liat apa sampe muka kecut gitu? 😖 Ada yang aneh ya? Cerita dong!",
-        "Haha, keliatannya jijik banget nih? 😝 Ada apa sih sampe gitu?",
-        "Kamu keliatan nggak nyaman nih, ada yang ganggu ya? 😖 Yuk cerita!"
-    ],
-    Contempt: [
-        "Duh, tatapan kamu kayak meremehkan gini ada apa nih? 😏 Cerita dong!",
-        "Kok keliatannya kayak lagi nyindir gitu sih? 😆 Ada drama ya, spill dong!",
-        "Haha, mukanya kayak 'seriusan nih?' gitu ya? 😄 Ada apa sih sampe gini?"
-    ]
-};
-
-const emotionResponsesEnglish = {
-    Happy: [
-        "OMG bro, u look so happy! 😍 What’s making u smile like that? Spill the tea! 🎉",
-        "Ayy bro, ur smile is giving me life! 😊 What’s up, anything fun happen? 🌟",
-        "Yo bro, u look super lit today! 😄 Got some good vibes to share? 🫶"
-    ],
-    Sad: [
-        "Aww bro, u look so down... 🥺 What’s wrong? I’m here for u, let’s talk! 💖",
-        "Hey bro, u okay? 😢 U seem kinda sad, wanna tell me what’s up? 🤗",
-        "Oh no bro, u look so sad... 🥺 I gotchu, tell me what’s making u feel like this! 💙"
-    ],
-    Angry: [
-        "Whoa bro, u look kinda pissed! 😤 What’s got u so mad? Tell me, I gotchu! 🤗",
-        "Yo bro, u seem super annoyed! 😣 What’s making u so angry? Let’s chat! 🫶",
-        "Hey bro, u look like u wanna punch smth! 😠 What’s up, spill it! 😤"
-    ],
-    Surprised: [
-        "Whoa bro, u look so shocked! 😲 What’s got u like that? Tell me quick! 🎉",
-        "OMG bro, ur face is like 😳! What happened, tell me everything! 🌟",
-        "Ayy bro, u look super surprised! 😲 What’s the tea, spill it! 🫶"
-    ],
-    Neutral: [
-        "Hey bro, u seem chill today! 😎 How’s ur day going? Got any fun stuff to share? 🌟",
-        "Yo bro, u look pretty chill! 😊 How’s ur day, anything cool happen? 🫶",
-        "Ayy bro, u seem relaxed! 😎 What’s up with u today, tell me! 🌟"
-    ],
-    Fear: [
-        "Oh no bro, u look kinda scared! 😱 What’s freaking u out? I’m here, talk to me! 🤗",
-        "Hey bro, u seem super spooked! 😨 What’s got u so scared? I gotchu! 💙",
-        "Yo bro, u look like u saw a ghost! 😱 What’s scaring u, tell me! 🤗"
-    ],
-    Disgust: [
-        "Eww bro, what’s making u look so grossed out? 🤢 Tell me, I wanna know! 😝",
-        "Ayy bro, u look like u just saw smth nasty! 🤮 What’s up, spill it! 😝",
-        "Yo bro, ur face is like ew! 🤢 What’s making u feel like that? Tell me! 😜"
-    ],
-    Contempt: [
-        "Hmm, u look like u’re judging smth! 😏 What’s up? Spill it, I’m curious! 🤔",
-        "Hey bro, u got that judgy look! 😆 What’s got u like that? Tell me! 🌟",
-        "Yo bro, u look like u’re side-eyeing smth! 😏 What’s the tea, spill it! 🤔"
-    ]
-};
-
-function getRandomResponse(emotion) {
-    const responses = detectedLanguage === 'vi' ? emotionResponses[emotion] || emotionResponses.Neutral : emotionResponsesEnglish[emotion] || emotionResponsesEnglish.Neutral;
-    if (!usedResponses[emotion]) usedResponses[emotion] = [];
-
-    let availableResponses = responses.filter((_, idx) => !usedResponses[emotion].includes(idx));
-    if (availableResponses.length === 0) {
-        usedResponses[emotion] = [];
-        availableResponses = responses;
-    }
-
-    const idx = Math.floor(Math.random() * availableResponses.length);
-    const response = availableResponses[idx];
-    const globalIdx = responses.indexOf(response);
-    usedResponses[emotion].push(globalIdx);
-
-    return response;
+// Initialize statistics dashboard
+function initializeStatsDashboard() {
+    updateStatsDisplay({
+        total_faces: 0,
+        processing_time: 0,
+        dominant_emotion: 'None',
+        emotion_stability: 0
+    });
 }
 
-function sendFrame(video, confidence) {
-    const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    const ctx = canvas.getContext('2d');
+// Update statistics display
+function updateStatsDisplay(stats) {
+    const statsContainer = document.getElementById('stats-container');
+    if (!statsContainer) return;
+    
+    statsContainer.innerHTML = `
+        <div class="stat-card">
+            <div class="stat-icon">👥</div>
+            <div class="stat-value">${stats.total_faces}</div>
+            <div class="stat-label">Faces Detected</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon">⚡</div>
+            <div class="stat-value">${(stats.processing_time * 1000).toFixed(1)}ms</div>
+            <div class="stat-label">Processing Time</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon">🎯</div>
+            <div class="stat-value">${stats.dominant_emotion}</div>
+            <div class="stat-label">Dominant Emotion</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon">📊</div>
+            <div class="stat-value">${(stats.emotion_stability * 100).toFixed(1)}%</div>
+            <div class="stat-label">Emotion Stability</div>
+        </div>
+    `;
+}
 
-    function send() {
-        if (!isSendingFrames) return;
-        const now = performance.now();
-        if (now - lastFrameTime < FRAME_INTERVAL) {
-            requestAnimationFrame(send);
-            return;
+// Update emotion chart data
+function updateEmotionChart(detections) {
+    if (!emotionChart) return;
+    
+    // Reset emotion counts
+    const emotionCounts = [0, 0, 0, 0, 0];
+    
+    // Count emotions from detections
+    detections.forEach(detection => {
+        const emotion = detection.emotion;
+        const emotionIndex = emotionData.labels.indexOf(emotion);
+        if (emotionIndex !== -1) {
+            emotionCounts[emotionIndex]++;
         }
-        lastFrameTime = now;
-
-        if (!video.srcObject || !video.videoWidth || !video.videoHeight) {
-            isSendingFrames = false;
-            return;
-        }
-
-        ctx.drawImage(video, 0, 0);
-        canvas.toBlob(blob => {
-            if (!isSendingFrames) return;
-            blob.arrayBuffer().then(buffer => {
-                const currentTime = performance.now();
-                const fps = prevTime ? 1000 / (currentTime - prevTime) : 0;
-                prevTime = currentTime;
-                socket.emit('frame', {
-                    image: new Uint8Array(buffer),
-                    confidence: confidence,
-                    fps: fps
-                });
-                document.getElementById('fps-value').textContent = fps.toFixed(1);
-            });
-        }, 'image/jpeg', 1.0);
-        requestAnimationFrame(send);
-    }
-    isSendingFrames = true;
-    lastFrameTime = performance.now();
-    send();
-
-    initialEmotionBuffer = [];
-    hasInitiatedChat = false;
-    if (initialEmotionTimer) clearTimeout(initialEmotionTimer);
-    initialEmotionTimer = setTimeout(() => {
-        dominantEmotion = getMostFrequentEmotion(initialEmotionBuffer);
-        if (dominantEmotion !== 'No face detected' && !hasInitiatedChat) {
-            const response = getRandomResponse(dominantEmotion);
-            appendBotMessage(response);
-            hasInitiatedChat = true;
-            currentEmotion = dominantEmotion;
-        }
-    }, 5000);
+    });
+    
+    // Update chart data
+    emotionChart.data.datasets[0].data = emotionCounts;
+    emotionChart.update('none'); // Update without animation for real-time
 }
 
-socket.on('result_frame', data => {
-    if (!isSendingFrames) return;
-    const video = document.getElementById('realtime-video');
-    const canvas = document.getElementById('realtime-canvas');
-    const resultDiv = document.getElementById('realtime-result');
-    const ctx = canvas.getContext('2d');
-
-    if (!video.videoWidth || !video.videoHeight) return;
-
-    const videoWidth = video.videoWidth;
-    const videoHeight = video.videoHeight;
-    const canvasWidth = canvas.clientWidth;
-    const canvasHeight = canvas.clientHeight;
-    const scaleX = canvasWidth / videoWidth;
-    const scaleY = canvasHeight / videoHeight;
-
+// Draw bounding boxes dengan labels yang jelas
+function drawBoundingBoxes(detections, videoElement) {
+    if (!canvas || !ctx || !videoElement) return;
+    
+    // Set canvas size to match video
+    canvas.width = videoElement.videoWidth;
+    canvas.height = videoElement.videoHeight;
+    
+    // Clear previous drawings
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    detections.forEach((detection, index) => {
+        const [x1, y1, x2, y2] = detection.bbox;
+        const emotion = detection.emotion;
+        const confidence = detection.emotion_confidence;
+        const trackId = detection.track_id;
+        
+        // Calculate colors based on emotion
+        const colors = getEmotionColors(emotion);
+        
+        // Draw bounding box
+        ctx.strokeStyle = colors.border;
+        ctx.lineWidth = 3;
+        ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+        
+        // Draw filled background untuk label
+        const labelText = `${emotion} (${(confidence * 100).toFixed(1)}%)`;
+        const labelWidth = ctx.measureText(labelText).width + 20;
+        const labelHeight = 30;
+        
+        ctx.fillStyle = colors.background;
+        ctx.fillRect(x1, y1 - labelHeight, labelWidth, labelHeight);
+        
+        // Draw label text
+        ctx.fillStyle = colors.text;
+        ctx.font = 'bold 14px Arial';
+        ctx.textAlign = 'left';
+        ctx.fillText(labelText, x1 + 10, y1 - 10);
+        
+        // Draw person ID
+        ctx.fillStyle = colors.border;
+        ctx.font = 'bold 12px Arial';
+        ctx.fillText(`ID: ${trackId}`, x1, y2 + 20);
+        
+        // Draw emotion icon
+        const emoji = getEmotionEmoji(emotion);
+        ctx.font = '20px Arial';
+        ctx.fillText(emoji, x1 + labelWidth + 10, y1 - 10);
+    });
+}
 
+// Get emotion colors
+function getEmotionColors(emotion) {
+    const colorMap = {
+        'Happy': {
+            border: '#00FF00',
+            background: 'rgba(0, 255, 0, 0.9)',
+            text: '#000000'
+        },
+        'Neutral': {
+            border: '#0080FF',
+            background: 'rgba(0, 128, 255, 0.9)',
+            text: '#FFFFFF'
+        },
+        'Sad': {
+            border: '#808080',
+            background: 'rgba(128, 128, 128, 0.9)',
+            text: '#FFFFFF'
+        },
+        'Angry': {
+            border: '#FF0000',
+            background: 'rgba(255, 0, 0, 0.9)',
+            text: '#FFFFFF'
+        },
+        'Surprised': {
+            border: '#FF00FF',
+            background: 'rgba(255, 0, 255, 0.9)',
+            text: '#FFFFFF'
+        }
+    };
+    
+    return colorMap[emotion] || colorMap['Neutral'];
+}
+
+// Get emotion emoji
+function getEmotionEmoji(emotion) {
+    const emojiMap = {
+        'Happy': '😊',
+        'Neutral': '😐',
+        'Sad': '😢',
+        'Angry': '😠',
+        'Surprised': '😲'
+    };
+    
+    return emojiMap[emotion] || '❓';
+}
+
+// Update emotion timeline
+function updateEmotionTimeline(detections) {
+    const timelineContainer = document.getElementById('emotion-timeline');
+    if (!timelineContainer) return;
+    
+    // Update emotion history
+    detections.forEach(detection => {
+        const trackId = detection.track_id;
+        if (!emotionHistory[trackId]) {
+            emotionHistory[trackId] = [];
+        }
+        
+        emotionHistory[trackId].push({
+            emotion: detection.emotion,
+            timestamp: Date.now(),
+            confidence: detection.emotion_confidence
+        });
+        
+        // Keep only last 10 emotions per person
+        if (emotionHistory[trackId].length > 10) {
+            emotionHistory[trackId] = emotionHistory[trackId].slice(-10);
+        }
+    });
+    
+    // Render timeline
+    renderEmotionTimeline();
+}
+
+// Render emotion timeline
+function renderEmotionTimeline() {
+    const timelineContainer = document.getElementById('emotion-timeline');
+    if (!timelineContainer) return;
+    
+    let timelineHTML = '<h3>Emotion Timeline</h3>';
+    
+    Object.entries(emotionHistory).forEach(([trackId, emotions]) => {
+        timelineHTML += `
+            <div class="person-timeline">
+                <div class="person-header">
+                    <span class="person-id">${trackId}</span>
+                    <span class="emotion-count">${emotions.length} emotions</span>
+                </div>
+                <div class="emotion-sequence">
+                    ${emotions.map(emotion => `
+                        <span class="emotion-badge ${emotion.emotion.toLowerCase()}" 
+                              title="${emotion.emotion} (${(emotion.confidence * 100).toFixed(1)}%)">
+                            ${getEmotionEmoji(emotion.emotion)}
+                        </span>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    });
+    
+    timelineContainer.innerHTML = timelineHTML;
+}
+
+// Toggle webcam
+async function toggleWebcam() {
+    const webcamToggle = document.getElementById('webcam-toggle');
+    const webcamOff = document.getElementById('webcam-off');
+    const loading = document.getElementById('loading');
+    const video = document.getElementById('webcam');
+    const resultDiv = document.getElementById('realtime-result');
+    
+    if (stream) {
+        // Turn off webcam
+        stream.getTracks().forEach(track => track.stop());
+        stream = null;
+        video.srcObject = null;
+        webcamOff.style.display = 'block';
+        video.style.display = 'none';
+        webcamToggle.innerHTML = '<i class="fas fa-camera"></i> Turn On Webcam';
+        resultDiv.innerHTML = '';
+        
+        // Clear canvas
+        if (ctx) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+        
+        // Reset emotion history
+        emotionHistory = {};
+        updateEmotionChart([]);
+        updateStatsDisplay({
+            total_faces: 0,
+            processing_time: 0,
+            dominant_emotion: 'None',
+            emotion_stability: 0
+        });
+        
+    } else {
+        // Turn on webcam
+        webcamOff.style.display = 'none';
+        loading.style.display = 'block';
+        webcamToggle.innerHTML = '<i class="fas fa-camera"></i> Turn Off Webcam';
+        
+        try {
+            stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { 
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 }
+                } 
+            });
+            
+            video.srcObject = stream;
+            video.onloadedmetadata = () => {
+                video.play();
+                loading.style.display = 'none';
+                video.style.display = 'block';
+                
+                // Start real-time processing
+                startRealtimeProcessing();
+                
+                showNotification('Webcam activated! 🎥');
+            };
+            
+        } catch (error) {
+            loading.style.display = 'none';
+            webcamOff.style.display = 'block';
+            webcamToggle.innerHTML = '<i class="fas fa-camera"></i> Turn On Webcam';
+            resultDiv.innerHTML = `<p class="error-message">Cannot access webcam: ${error.message} 🚫</p>`;
+        }
+    }
+}
+
+// Start real-time processing
+function startRealtimeProcessing() {
+    if (isProcessing) return;
+    isProcessing = true;
+    
+    const video = document.getElementById('webcam');
+    
+    function processFrame() {
+        if (!isProcessing || !stream) return;
+        
+        // Create canvas untuk capture frame
+        const tempCanvas = document.createElement('canvas');
+        const tempCtx = tempCanvas.getContext('2d');
+        tempCanvas.width = video.videoWidth;
+        tempCanvas.height = video.videoHeight;
+        
+        // Draw current video frame
+        tempCtx.drawImage(video, 0, 0);
+        
+        // Convert to base64
+        const imageData = tempCanvas.toDataURL('image/jpeg', 0.8);
+        
+        // Send frame untuk processing
+        socket.emit('process_frame', { image: imageData });
+        
+        // Continue processing
+        requestAnimationFrame(processFrame);
+    }
+    
+    // Start processing loop
+    processFrame();
+}
+
+// Handle frame results
+function handleFrameResult(data) {
     if (data.error) {
-        resultDiv.innerHTML = `<p style="color: red;">${data.error} 🚫</p>`;
+        console.error('Frame processing error:', data.error);
         return;
     }
 
-    data.results.forEach(r => {
-        if (r.emotion !== 'No face detected' && r.bbox && r.bbox.length === 4) {
-            let [x1, y1, x2, y2] = r.bbox;
-            if (isNaN(x1) || isNaN(y1) || isNaN(x2) || isNaN(y2)) return;
-
-            x1 = x1 * scaleX;
-            y1 = y1 * scaleY;
-            x2 = x2 * scaleX;
-            y2 = y2 * scaleY;
-
-            x1 = Math.max(0, Math.min(x1, canvasWidth));
-            y1 = Math.max(0, Math.min(y1, canvasHeight));
-            x2 = Math.max(0, Math.min(x2, canvasWidth));
-            y2 = Math.max(0, Math.min(y2, canvasHeight));
-
-            ctx.strokeStyle = r.color;
-            ctx.lineWidth = 3;
-            ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
-
-            const confidencePercent = (r.confidence * 100).toFixed(0);
-            const label = `${r.name} - ${r.emotion}: ${confidencePercent}%`;
-            ctx.font = 'bold 18px Roboto';
-            const textWidth = ctx.measureText(label).width;
-            const textHeight = 18;
-
-            let textX = x1;
-            let textY = y1 - 10;
-            let boxY = y1 - textHeight - 15;
-            if (y1 - textHeight - 10 < 0) {
-                textY = y2 + textHeight + 10;
-                boxY = y2 + 5;
-            }
-
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-            ctx.fillRect(x1, boxY, textWidth + 10, textHeight + 10);
-            ctx.fillStyle = '#FFFFFF';
-            ctx.fillText(label, x1 + 5, textY);
-        }
+    const results = data.results;
+    const detections = results.detections || [];
+    
+    // Update statistics
+    updateStatsDisplay({
+        total_faces: results.total_faces || 0,
+        processing_time: results.processing_time || 0,
+        dominant_emotion: getDominantEmotion(detections),
+        emotion_stability: calculateEmotionStability(detections)
     });
-
-    // Temukan deteksi dengan confidence tertinggi untuk dijadikan sorotan utama
-    const primary_detection = data.results.reduce((max, r) => r.confidence > max.confidence ? r : max, data.results[0]);
-
-    if (primary_detection) {
-        const person = primary_detection.name || 'Unknown';
-        const smoothedEmotion = smoothEmotion(primary_detection.emotion);
-        const confidencePercent = (primary_detection.confidence * 100).toFixed(0);
-        resultDiv.innerHTML = `
-        <div class="result-container">
-            Person: <span class="emotion-label">${person}</span> | Emotion: <span class="emotion-label">${smoothedEmotion} ${primary_detection.emoji || ''}</span> (Confidence: ${confidencePercent}%)
-        </div>`;
-
-        if (initialEmotionTimer && primary_detection.emotion && primary_detection.emotion !== 'No face detected') {
-            initialEmotionBuffer.push(primary_detection.emotion);
-        }
-    }
-});
-
-function appendBotMessage(message) {
-    const chatDiv = document.getElementById('chat-container');
-    const messageDiv = document.createElement('div');
-    messageDiv.className = 'bot-message';
-    messageDiv.innerHTML = `
-        <img src="/static/images/ic_launcher.png" alt="Bot Avatar" class="chat-avatar">
-        <span>${message}</span>`;
-    chatDiv.appendChild(messageDiv);
-    chatDiv.scrollTop = chatDiv.scrollHeight;
+    
+    // Update emotion chart
+    updateEmotionChart(detections);
+    
+    // Update emotion timeline
+    updateEmotionTimeline(detections);
+    
+    // Draw bounding boxes
+    const video = document.getElementById('webcam');
+    drawBoundingBoxes(detections, video);
+    
+    // Update result display
+    updateResultDisplay(results);
 }
 
-socket.on('chat_responding', data => {
-    const chatDiv = document.getElementById('chat-container');
-    const respondingDiv = document.createElement('div');
-    respondingDiv.className = 'responding-indicator';
-    respondingDiv.textContent = '...';
-    chatDiv.appendChild(respondingDiv);
-    chatDiv.scrollTop = chatDiv.scrollHeight;
-});
+// Get dominant emotion
+function getDominantEmotion(detections) {
+    if (detections.length === 0) return 'None';
+    
+    const emotionCounts = {};
+    detections.forEach(detection => {
+        const emotion = detection.emotion;
+        emotionCounts[emotion] = (emotionCounts[emotion] || 0) + 1;
+    });
+    
+    return Object.entries(emotionCounts)
+        .sort(([,a], [,b]) => b - a)[0][0];
+}
 
-socket.on('chat_response', data => {
-    const chatDiv = document.getElementById('chat-container');
-    const statusDiv = document.getElementById('chatbot-status');
-    chatDiv.querySelector('.responding-indicator')?.remove();
+// Calculate emotion stability
+function calculateEmotionStability(detections) {
+    if (detections.length === 0) return 0;
+    
+    let totalStability = 0;
+    detections.forEach(detection => {
+        if (detection.temporal_analysis && detection.temporal_analysis.emotion_stability) {
+            totalStability += detection.temporal_analysis.emotion_stability;
+        }
+    });
+    
+    return totalStability / detections.length;
+}
 
-    const messageDiv = document.createElement('div');
-    messageDiv.className = 'bot-message';
-    messageDiv.innerHTML = `
-        <img src="/static/images/ic_launcher.png" alt="Bot Avatar" class="chat-avatar">
-        <span>${data.message}</span>`;
-    chatDiv.appendChild(messageDiv);
-    chatDiv.scrollTop = chatDiv.scrollHeight;
+// Update result display
+function updateResultDisplay(results) {
+    const resultDiv = document.getElementById('realtime-result');
+    if (!resultDiv) return;
+    
+    const detections = results.detections || [];
+    
+    if (detections.length === 0) {
+        resultDiv.innerHTML = '<p class="no-faces">No faces detected</p>';
+        return;
+    }
+    
+    let resultHTML = '<div class="detection-results">';
+    detections.forEach(detection => {
+        const emotion = detection.emotion;
+        const confidence = detection.emotion_confidence;
+        const bbox = detection.bbox;
+        
+        resultHTML += `
+            <div class="detection-item ${emotion.toLowerCase()}">
+                <div class="detection-header">
+                    <span class="emotion-emoji">${getEmotionEmoji(emotion)}</span>
+                    <span class="emotion-label">${emotion}</span>
+                    <span class="confidence">${(confidence * 100).toFixed(1)}%</span>
+                </div>
+                <div class="detection-details">
+                    <span class="bbox-info">BBox: [${bbox.join(', ')}]</span>
+                    <span class="track-id">ID: ${detection.track_id}</span>
+                </div>
+            </div>
+        `;
+    });
+    resultHTML += '</div>';
+    
+    resultDiv.innerHTML = resultHTML;
+}
 
-    statusDiv.className = `chatbot-status ${data.status}`;
-    statusDiv.textContent = data.status === 'success'
-        ? 'Chatbot is active! Response sent! 🤖✅'
-        : 'Chatbot error... Please try again!';
+// Show notification
+function showNotification(message) {
+    const notification = document.getElementById('notification');
+    if (notification) {
+        notification.textContent = message;
+        notification.style.display = 'block';
+        setTimeout(() => {
+            notification.style.display = 'none';
+        }, 3000);
+    }
+}
+
+// Initialize when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize dashboard
+    initializeRealtimeDashboard();
+    
+    // Setup event listeners
+    const webcamToggle = document.getElementById('webcam-toggle');
+    if (webcamToggle) {
+        webcamToggle.addEventListener('click', toggleWebcam);
+    }
+    
+    // Setup Socket.IO
+    if (typeof io !== 'undefined') {
+        socket = io();
+        
+        socket.on('connect', () => {
+            console.log('Connected to server');
+            showNotification('Connected to server! 🚀');
+        });
+        
+        socket.on('frame_result', handleFrameResult);
+        
+        socket.on('disconnect', () => {
+            console.log('Disconnected from server');
+            showNotification('Disconnected from server! 📡');
+        });
+    }
+    
+    console.log('✅ Realtime page initialized');
 });

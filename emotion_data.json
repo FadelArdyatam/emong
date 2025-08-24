@@ -1,0 +1,71 @@
+{
+  "emotion_history": {
+    "0": [
+      {
+        "emotion": "Happy",
+        "confidence": 0.5,
+        "timestamp": 1756012076.896499,
+        "datetime": "2025-08-24T12:07:56.896499"
+      },
+      {
+        "emotion": "Happy",
+        "confidence": 0.5,
+        "timestamp": 1756012079.3674395,
+        "datetime": "2025-08-24T12:07:59.367440"
+      },
+      {
+        "emotion": "Happy",
+        "confidence": 0.5,
+        "timestamp": 1756012080.1885204,
+        "datetime": "2025-08-24T12:08:00.188520"
+      },
+      {
+        "emotion": "Neutral",
+        "confidence": 0.6,
+        "timestamp": 1756012081.2163703,
+        "datetime": "2025-08-24T12:08:01.216370"
+      },
+      {
+        "emotion": "Neutral",
+        "confidence": 0.6,
+        "timestamp": 1756012082.1952305,
+        "datetime": "2025-08-24T12:08:02.195230"
+      }
+    ],
+    "0": [
+      {
+        "emotion": "Surprised",
+        "confidence": 0.7,
+        "timestamp": 1756012885.2389321,
+        "datetime": "2025-08-24T12:21:25.238932"
+      },
+      {
+        "emotion": "Surprised",
+        "confidence": 0.4,
+        "timestamp": 1756012886.2245862,
+        "datetime": "2025-08-24T12:21:26.224586"
+      },
+      {
+        "emotion": "Surprised",
+        "confidence": 0.4,
+        "timestamp": 1756012887.2246952,
+        "datetime": "2025-08-24T12:21:27.224695"
+      },
+      {
+        "emotion": "Surprised",
+        "confidence": 0.4,
+        "timestamp": 1756012888.2062638,
+        "datetime": "2025-08-24T12:21:28.206264"
+      },
+      {
+        "emotion": "Surprised",
+        "confidence": 0.4,
+        "timestamp": 1756012889.2200377,
+        "datetime": "2025-08-24T12:21:29.220038"
+      }
+    ]
+  },
+  "face_tracking": {},
+  "last_updated": "2025-08-24T12:21:29.220037",
+  "total_sessions": 2
+}
